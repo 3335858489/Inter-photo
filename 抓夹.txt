@@ -1,208 +1,95 @@
-user@user-virtual-machine:~$ cd ~/dummy_ws
-colcon build
-source install/setup.bash
-ros2 launch dummy_moveit_config demo.launch.py
-Starting >>> dummy-ros2_description
-Starting >>> simulink_motor_controller
-[0.579s] WARNING:colcon.colcon_ros.task.ament_python.build:Package 'dummy-ros2_description' doesn't explicitly install a marker in the package index (colcon-ros currently does it implicitly but that fallback will be removed in the future)
-[0.579s] WARNING:colcon.colcon_ros.task.ament_python.build:Package 'dummy-ros2_description' doesn't explicitly install the 'package.xml' file (colcon-ros currently does it implicitly but that fallback will be removed in the future)
---- stderr: dummy-ros2_description                                   
-Traceback (most recent call last):
-  File "/usr/lib/python3/dist-packages/colcon_core/executor/__init__.py", line 91, in __call__
-    rc = await self.task(*args, **kwargs)
-  File "/usr/lib/python3/dist-packages/colcon_core/task/__init__.py", line 93, in __call__
-    return await task_method(*args, **kwargs)
-  File "/usr/lib/python3/dist-packages/colcon_ros/task/ament_python/build.py", line 102, in build
-    return await extension.build(additional_hooks=additional_hooks)
-  File "/usr/lib/python3/dist-packages/colcon_core/task/python/build.py", line 96, in build
-    available_commands = await self._get_available_commands(
-  File "/usr/lib/python3/dist-packages/colcon_core/task/python/build.py", line 194, in _get_available_commands
-    output = await check_output(
-  File "/usr/lib/python3/dist-packages/colcon_core/subprocess.py", line 129, in check_output
-    assert not rc, f'Expected {args} to pass: {stderr_data}'
-AssertionError: Expected ['/usr/bin/python3', '-W', 'ignore:setup.py install is deprecated', '-W', 'ignore:easy_install command is deprecated', 'setup.py', '--help-commands'] to pass: /usr/bin/python3: can't open file '/home/user/dummy_ws/src/dummy-ros2_description/setup.py': [Errno 2] No such file or directory
+破案了！不要灰心，这次闪退**不是你的代码写错了**。你仔细看你终端输出的最上面几行：
 
----
-Failed   <<< dummy-ros2_description [0.30s, exited with code 1]
-Aborted  <<< simulink_motor_controller [0.65s]                     
-
+```text
 Summary: 0 packages finished [1.11s]
   1 package failed: dummy-ros2_description
-  1 package aborted: simulink_motor_controller
-  1 package had stderr output: dummy-ros2_description
-  1 package not processed
-Expected ['/usr/bin/python3', '-W', 'ignore:setup.py install is deprecated', '-W', 'ignore:easy_install command is deprecated', 'setup.py', '--help-commands'] to pass: /usr/bin/python3: can't open file '/home/user/dummy_ws/src/dummy-ros2_description/setup.py': [Errno 2] No such file or directory
+```
 
-[INFO] [launch]: All log files can be found below /home/user/.ros/log/2026-03-26-21-23-08-594223-user-virtual-machine-17566
-[INFO] [launch]: Default logging verbosity is set to INFO
-Using load_yaml() directly is deprecated. Use xacro.load_yaml() instead.
-[INFO] [move_group-1]: process started with pid [17569]
-[INFO] [rviz2-2]: process started with pid [17571]
-[move_group-1] Error:   Link 'gripper_base_link' declared as part of group 'gripper' is not known to the URDF
-[move_group-1]          at line 166 in ./src/model.cpp
-[move_group-1] Error:   Link 'left_finger' declared as part of group 'gripper' is not known to the URDF
-[move_group-1]          at line 166 in ./src/model.cpp
-[move_group-1] Error:   Link 'right_finger' declared as part of group 'gripper' is not known to the URDF
-[move_group-1]          at line 166 in ./src/model.cpp
-[move_group-1] Error:   Joint 'finger_joint1' declared as part of group 'gripper' is not known to the URDF
-[move_group-1]          at line 185 in ./src/model.cpp
-[move_group-1] Warning: Group 'gripper' is empty.
-[move_group-1]          at line 262 in ./src/model.cpp
-[move_group-1] Error:   Joint 'finger_joint1' declared as part of group state 'open' is not known to the URDF
-[move_group-1]          at line 363 in ./src/model.cpp
-[move_group-1] Error:   Joint 'finger_joint1' declared as part of group state 'close' is not known to the URDF
-[move_group-1]          at line 363 in ./src/model.cpp
-[move_group-1] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
-[move_group-1]          at line 594 in ./src/model.cpp
-[move_group-1] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
-[move_group-1]          at line 589 in ./src/model.cpp
-[move_group-1] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
-[move_group-1]          at line 589 in ./src/model.cpp
-[move_group-1] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
-[move_group-1]          at line 594 in ./src/model.cpp
-[move_group-1] Warning: Link 'right_finger' is not known to URDF. Cannot disable/enable collisons.
-[move_group-1]          at line 594 in ./src/model.cpp
-[move_group-1] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
-[move_group-1]          at line 589 in ./src/model.cpp
-[move_group-1] Warning: Link 'camera_link' is not known to URDF. Cannot disable/enable collisons.
-[move_group-1]          at line 594 in ./src/model.cpp
-[move_group-1] [INFO] [1774531388.918663457] [moveit_rdf_loader.rdf_loader]: Loaded robot model in 0 seconds
-[move_group-1] [INFO] [1774531388.919110987] [moveit_robot_model.robot_model]: Loading robot model 'dummy-ros2'...
-[move_group-1] [WARN] [1774531388.977696489] [moveit_robot_model.robot_model]: Group 'gripper' must have at least one valid joint
-[move_group-1] [WARN] [1774531388.977736161] [moveit_robot_model.robot_model]: Failed to add group 'gripper'
-[move_group-1] [ERROR] [1774531388.977767097] [moveit_robot_model.robot_model]: Group state 'open' specified for group 'gripper', but that group does not exist
-[move_group-1] [ERROR] [1774531388.977771104] [moveit_robot_model.robot_model]: Group state 'close' specified for group 'gripper', but that group does not exist
-[move_group-1] [INFO] [1774531389.349640431] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Publishing maintained planning scene on 'monitored_planning_scene'
-[move_group-1] [INFO] [1774531389.350511817] [moveit.ros_planning_interface.moveit_cpp]: Listening to 'joint_states' for joint states
-[move_group-1] [INFO] [1774531389.352383710] [moveit_ros.current_state_monitor]: Listening to joint states on topic 'joint_states'
-[move_group-1] [INFO] [1774531389.354540552] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/attached_collision_object' for attached collision objects
-[move_group-1] [INFO] [1774531389.354572780] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting planning scene monitor
-[move_group-1] [INFO] [1774531389.355333816] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/planning_scene'
-[move_group-1] [INFO] [1774531389.355350817] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting world geometry update monitor for collision objects, attached objects, octomap updates.
-[move_group-1] [INFO] [1774531389.356645529] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to 'collision_object'
-[move_group-1] [INFO] [1774531389.359066308] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to 'planning_scene_world' for planning scene world geometry
-[move_group-1] [WARN] [1774531389.361723605] [moveit.ros.occupancy_map_monitor.middleware_handle]: Resolution not specified for Octomap. Assuming resolution = 0.1 instead
-[move_group-1] [ERROR] [1774531389.361773725] [moveit.ros.occupancy_map_monitor.middleware_handle]: No 3D sensor plugin(s) defined for octomap updates
-[move_group-1] [INFO] [1774531389.445717008] [moveit.ros_planning_interface.moveit_cpp]: Loading planning pipeline 'ompl'
-[move_group-1] [INFO] [1774531389.455042115] [moveit.ros_planning.planning_pipeline]: Using planning interface 'OMPL'
-[move_group-1] [INFO] [1774531389.456724719] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.path_tolerance' was not set. Using default value: 0.100000
-[move_group-1] [INFO] [1774531389.456768298] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.resample_dt' was not set. Using default value: 0.100000
-[move_group-1] [INFO] [1774531389.456773077] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.min_angle_change' was not set. Using default value: 0.001000
-[move_group-1] [INFO] [1774531389.456788394] [moveit_ros.fix_workspace_bounds]: Param 'ompl.default_workspace_bounds' was not set. Using default value: 10.000000
-[move_group-1] [INFO] [1774531389.456799955] [moveit_ros.fix_start_state_bounds]: Param 'ompl.start_state_max_bounds_error' was set to 0.100000
-[move_group-1] [INFO] [1774531389.456804363] [moveit_ros.fix_start_state_bounds]: Param 'ompl.start_state_max_dt' was not set. Using default value: 0.500000
-[move_group-1] [INFO] [1774531389.456811817] [moveit_ros.fix_start_state_collision]: Param 'ompl.start_state_max_dt' was not set. Using default value: 0.500000
-[move_group-1] [INFO] [1774531389.456816255] [moveit_ros.fix_start_state_collision]: Param 'ompl.jiggle_fraction' was set to 0.050000
-[move_group-1] [INFO] [1774531389.456820472] [moveit_ros.fix_start_state_collision]: Param 'ompl.max_sampling_attempts' was not set. Using default value: 100
-[move_group-1] [INFO] [1774531389.456828276] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Add Time Optimal Parameterization'
-[move_group-1] [INFO] [1774531389.456832204] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Resolve constraint frames to robot links'
-[move_group-1] [INFO] [1774531389.456834999] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Workspace Bounds'
-[move_group-1] [INFO] [1774531389.456866966] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State Bounds'
-[move_group-1] [INFO] [1774531389.456870062] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State In Collision'
-[move_group-1] [INFO] [1774531389.456872607] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State Path Constraints'
-[move_group-1] [INFO] [1774531389.486621708] [moveit.plugins.moveit_simple_controller_manager]: Added FollowJointTrajectory controller for arm_controller
-[move_group-1] [INFO] [1774531389.488914054] [moveit.plugins.moveit_simple_controller_manager]: Added FollowJointTrajectory controller for gripper_controller
-[move_group-1] [INFO] [1774531389.489201334] [moveit.plugins.moveit_simple_controller_manager]: Returned 2 controllers in list
-[move_group-1] [INFO] [1774531389.489226760] [moveit.plugins.moveit_simple_controller_manager]: Returned 2 controllers in list
-[move_group-1] [INFO] [1774531389.490934579] [moveit_ros.trajectory_execution_manager]: Trajectory execution is managing controllers
-[move_group-1] [INFO] [1774531389.490954485] [move_group.move_group]: MoveGroup debug mode is ON
-[move_group-1] [INFO] [1774531389.511671078] [move_group.move_group]: 
-[move_group-1] 
-[move_group-1] ********************************************************
-[move_group-1] * MoveGroup using: 
-[move_group-1] *     - ApplyPlanningSceneService
-[move_group-1] *     - ClearOctomapService
-[move_group-1] *     - CartesianPathService
-[move_group-1] *     - ExecuteTrajectoryAction
-[move_group-1] *     - GetPlanningSceneService
-[move_group-1] *     - KinematicsService
-[move_group-1] *     - MoveAction
-[move_group-1] *     - MotionPlanService
-[move_group-1] *     - QueryPlannersService
-[move_group-1] *     - StateValidationService
-[move_group-1] ********************************************************
-[move_group-1] 
-[move_group-1] [INFO] [1774531389.511725346] [moveit_move_group_capabilities_base.move_group_context]: MoveGroup context using planning plugin ompl_interface/OMPLPlanner
-[move_group-1] [INFO] [1774531389.511733480] [moveit_move_group_capabilities_base.move_group_context]: MoveGroup context initialization complete
-[move_group-1] Loading 'move_group/ApplyPlanningSceneService'...
-[move_group-1] Loading 'move_group/ClearOctomapService'...
-[move_group-1] Loading 'move_group/MoveGroupCartesianPathService'...
-[move_group-1] Loading 'move_group/MoveGroupExecuteTrajectoryAction'...
-[move_group-1] Loading 'move_group/MoveGroupGetPlanningSceneService'...
-[move_group-1] Loading 'move_group/MoveGroupKinematicsService'...
-[move_group-1] Loading 'move_group/MoveGroupMoveAction'...
-[move_group-1] Loading 'move_group/MoveGroupPlanService'...
-[move_group-1] Loading 'move_group/MoveGroupQueryPlannersService'...
-[move_group-1] Loading 'move_group/MoveGroupStateValidationService'...
-[move_group-1] 
-[move_group-1] You can start planning now!
-[move_group-1] 
-[rviz2-2] [INFO] [1774531390.238066258] [rviz2]: Stereo is NOT SUPPORTED
-[rviz2-2] [INFO] [1774531390.238274705] [rviz2]: OpenGl version: 3.3 (GLSL 3.3)
-[rviz2-2] [INFO] [1774531390.274487123] [rviz2]: Stereo is NOT SUPPORTED
-[rviz2-2] Warning: class_loader.impl: SEVERE WARNING!!! A namespace collision has occurred with plugin factory for class rviz_default_plugins::displays::InteractiveMarkerDisplay. New factory will OVERWRITE existing one. This situation occurs when libraries containing plugins are directly linked against an executable (the one running right now generating this message). Please separate plugins out into their own library or just don't link against the library and use either class_loader::ClassLoader/MultiLibraryClassLoader to open.
-[rviz2-2]          at line 253 in /opt/ros/humble/include/class_loader/class_loader/class_loader_core.hpp
-[rviz2-2] [ERROR] [1774531393.378126123] [moveit_ros_visualization.motion_planning_frame]: Action server: /recognize_objects not available
-[rviz2-2] [INFO] [1774531393.390015305] [moveit_ros_visualization.motion_planning_frame]: MoveGroup namespace changed: / -> . Reloading params.
-[rviz2-2] Error:   Link 'gripper_base_link' declared as part of group 'gripper' is not known to the URDF
-[rviz2-2]          at line 166 in ./src/model.cpp
-[rviz2-2] Error:   Link 'left_finger' declared as part of group 'gripper' is not known to the URDF
-[rviz2-2]          at line 166 in ./src/model.cpp
-[rviz2-2] Error:   Link 'right_finger' declared as part of group 'gripper' is not known to the URDF
-[rviz2-2]          at line 166 in ./src/model.cpp
-[rviz2-2] Error:   Joint 'finger_joint1' declared as part of group 'gripper' is not known to the URDF
-[rviz2-2]          at line 185 in ./src/model.cpp
-[rviz2-2] Warning: Group 'gripper' is empty.
-[rviz2-2]          at line 262 in ./src/model.cpp
-[rviz2-2] Error:   Joint 'finger_joint1' declared as part of group state 'open' is not known to the URDF
-[rviz2-2]          at line 363 in ./src/model.cpp
-[rviz2-2] Error:   Joint 'finger_joint1' declared as part of group state 'close' is not known to the URDF
-[rviz2-2]          at line 363 in ./src/model.cpp
-[rviz2-2] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
-[rviz2-2]          at line 594 in ./src/model.cpp
-[rviz2-2] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
-[rviz2-2]          at line 589 in ./src/model.cpp
-[rviz2-2] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
-[rviz2-2]          at line 589 in ./src/model.cpp
-[rviz2-2] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
-[rviz2-2]          at line 594 in ./src/model.cpp
-[rviz2-2] Warning: Link 'right_finger' is not known to URDF. Cannot disable/enable collisons.
-[rviz2-2]          at line 594 in ./src/model.cpp
-[rviz2-2] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
-[rviz2-2]          at line 589 in ./src/model.cpp
-[rviz2-2] Warning: Link 'camera_link' is not known to URDF. Cannot disable/enable collisons.
-[rviz2-2]          at line 594 in ./src/model.cpp
-[rviz2-2] [INFO] [1774531393.462339097] [moveit_rdf_loader.rdf_loader]: Loaded robot model in 0.1 seconds
-[rviz2-2] [INFO] [1774531393.462379891] [moveit_robot_model.robot_model]: Loading robot model 'dummy-ros2'...
-[rviz2-2] [WARN] [1774531393.536031566] [moveit_robot_model.robot_model]: Group 'gripper' must have at least one valid joint
-[rviz2-2] [WARN] [1774531393.536076948] [moveit_robot_model.robot_model]: Failed to add group 'gripper'
-[rviz2-2] [ERROR] [1774531393.536110429] [moveit_robot_model.robot_model]: Group state 'open' specified for group 'gripper', but that group does not exist
-[rviz2-2] [ERROR] [1774531393.536114666] [moveit_robot_model.robot_model]: Group state 'close' specified for group 'gripper', but that group does not exist
-[rviz2-2] [INFO] [1774531393.717022941] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting planning scene monitor
-[rviz2-2] [INFO] [1774531393.718142297] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/monitored_planning_scene'
-[rviz2-2] [ERROR] [1774531393.782835853] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
-[rviz2-2] [ERROR] [1774531393.783080375] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
-[rviz2-2] [ERROR] [1774531393.789709280] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
-[rviz2-2] 
-[rviz2-2] [ERROR] [1774531393.792633361] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
-[rviz2-2] [ERROR] [1774531393.792787580] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
-[rviz2-2] [ERROR] [1774531393.792916954] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
-[rviz2-2] 
-[rviz2-2] [INFO] [1774531393.799259620] [interactive_marker_display_93837090812976]: Connected on namespace: /rviz_moveit_motion_planning_display/robot_interaction_interactive_marker_topic
-[rviz2-2] [ERROR] [1774531393.800881845] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
-[rviz2-2] [ERROR] [1774531393.801007813] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
-[rviz2-2] [ERROR] [1774531393.801188280] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
-[rviz2-2] 
-[rviz2-2] [ERROR] [1774531393.803096873] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
-[rviz2-2] [ERROR] [1774531393.803233360] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
-[rviz2-2] [ERROR] [1774531393.803479505] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
-[rviz2-2] 
-[rviz2-2] [ERROR] [1774531393.803845057] [moveit_robot_model.robot_model]: Group 'gripper' not found in model 'dummy-ros2'
-[rviz2-2] [ERROR] [1774531393.804445904] [moveit_robot_model.robot_model]: Group 'gripper' not found in model 'dummy-ros2'
-[rviz2-2] [INFO] [1774531393.811122485] [moveit_ros_visualization.motion_planning_frame]: group dummy_arm
-[rviz2-2] [INFO] [1774531393.811165382] [moveit_ros_visualization.motion_planning_frame]: Constructing new MoveGroup connection for group 'dummy_arm' in namespace ''
-[rviz2-2] [INFO] [1774531393.818431329] [interactive_marker_display_93837090812976]: Sending request for interactive markers
-[rviz2-2] [INFO] [1774531393.829089023] [move_group_interface]: Ready to take commands for planning group dummy_arm.
-[rviz2-2] [ERROR] [1774531393.830182682] [moveit_robot_model.robot_model]: Group 'gripper' not found in model 'dummy-ros2'
-[ERROR] [rviz2-2]: process has died [pid 17571, exit code -11, cmd '/opt/ros/humble/lib/rviz2/rviz2 -d /home/user/dummy_ws/install/dummy_moveit_config/share/dummy_moveit_config/config/moveit.rviz --ros-args -r __node:=rviz2 --params-file /tmp/launch_params_g6xp5rbq --params-file /tmp/launch_params_o184dki4 --params-file /tmp/launch_params_a72qxgug --params-file /tmp/launch_params_prair0_r --params-file /tmp/launch_params_kgh749wt'].
+**发生了什么？**
+你之前的修改（去掉空格、加入抓夹）都是完全正确的！但是，在你运行 `colcon build` 的时候，**`dummy-ros2_description` 这个存放模型文件的包编译失败了！**
 
+因为编译失败，ROS2 系统并没有把你在 `src` 文件夹下修改好的新代码拷贝到 `install` 文件夹中。所以，MoveIt 读取了新的配置文件（知道有抓夹了），但 RViz 还在傻傻地读取旧的模型（连那个致命的空格都还在），两者一打架，RViz 就当场崩溃（段错误 exit code -11）。
+
+### 为什么会编译失败？
+看这行报错：`can't open file .../setup.py: [Errno 2] No such file or directory`。
+ROS2 的 `colcon` 编译器迷失了方向。它把你的 `dummy-ros2_description` 误认为了一个 Python 软件库去编译（所以找你要 `setup.py`）。这种情况通常发生在：
+1. 这个包是从 ROS1 迁移过来的（原来用的是 `catkin` 编译系统）。
+2. 这个包缺少了标准的 ROS2 编译配置文件。
+
+---
+
+### 🛠️ 终极修复方案：给模型包注入 ROS2 灵魂
+
+我们需要在 `~/dummy_ws/src/dummy-ros2_description/` 目录下，替换或新建两个标准的 ROS2 编译文件。
+
+#### 1. 覆盖（或新建） `package.xml`
+请打开 `~/dummy_ws/src/dummy-ros2_description/package.xml`，将其内容**全部替换**为以下标准 ROS2 格式：
+
+```xml
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>dummy-ros2_description</name>
+  <version>0.0.0</version>
+  <description>The dummy-ros2_description package</description>
+  <maintainer email="user@todo.todo">user</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
+  <exec_depend>joint_state_publisher_gui</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+```
+
+#### 2. 覆盖（或新建） `CMakeLists.txt`
+请打开 `~/dummy_ws/src/dummy-ros2_description/CMakeLists.txt`，将其内容**全部替换**为：
+
+```cmake
+cmake_minimum_required(VERSION 3.8)
+project(dummy-ros2_description)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# 寻找 ROS2 基础构建库
+find_package(ament_cmake REQUIRED)
+
+# 告诉编译器：把包含网格和代码的文件夹原封不动复制到 install 里！
+install(
+  DIRECTORY meshes urdf
+  DESTINATION share/${PROJECT_NAME}
+)
+
+ament_package()
+```
+
+*(注意：如果你这个包里还有 `rviz` 或者 `launch` 文件夹，请在 `DIRECTORY meshes urdf` 后面补上它们的名字，比如 `DIRECTORY meshes urdf launch`)*
+
+---
+
+### 🚀 重新起飞
+
+改好这两个文件后，我们再来一次标准的构建流程。这次一定能过！在终端执行：
+
+```bash
+cd ~/dummy_ws
+colcon build --symlink-install
+```
+
+**观察终端输出**：只要看到 `Summary: X packages finished`，并且**没有红色的 Failed**，就说明你刚才辛苦加上的抓夹和相机代码终于被系统识别了！
+
+然后继续运行：
+```bash
+source install/setup.bash
+ros2 launch dummy_moveit_config demo.launch.py
+```
+
+这次肯定不会闪退了。如果你在 RViz 里看到了带抓夹的机械臂，赶紧跟我说，我们要开始写激动人心的视觉抓取 Python 代码了！
