@@ -1,484 +1,83 @@
-在你的 dummy-ros2.xacro 文件末尾，</robot> 标签之前，加入以下代码。这里我们采用“眼观全局 (Eye-to-Hand)”的方案，将相机固定在基座前方看桌面：
-<link name="camera_link">
-  <visual>
-    <geometry>
-      <box size="0.05 0.05 0.05"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-</link>
-
-<joint name="camera_joint" type="fixed">
-  <parent link="world"/>
-  <child link="camera_link"/>
-  <origin xyz="0.5 0.0 0.4" rpy="0 0.785 3.1415"/>
-</joint>
-
-<link name="camera_depth_frame"/>
-<joint name="camera_depth_joint" type="fixed">
-  <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
-  <parent link="camera_link"/>
-  <child link="camera_depth_frame"/>
-</joint>
-
-<gazebo reference="camera_link">
-  <sensor type="depth" name="camera">
-    <always_on>true</always_on>
-    <update_rate>15.0</update_rate>
-    <camera>
-      <horizontal_fov>1.047</horizontal_fov>
-      <image>
-        <format>B8G8R8</format>
-        <width>640</width>
-        <height>480</height>
-      </image>
-      <clip>
-        <near>0.1</near>
-        <far>8.0</far>
-      </clip>
-    </camera>
-    <plugin name="camera_plugin" filename="libgazebo_ros_camera.so">
-      <ros>
-        <namespace>/</namespace>
-        <remapping>custom_camera/image_raw:=/camera/color/image_raw</remapping>
-        <remapping>custom_camera/image_depth:=/camera/depth/image_raw</remapping>
-        <remapping>custom_camera/camera_info:=/camera/color/camera_info</remapping>
-      </ros>
-      <camera_name>camera</camera_name>
-      <frame_name>camera_depth_frame</frame_name>
-      <min_depth>0.1</min_depth>
-      <max_depth>8.0</max_depth>
-    </plugin>
-  </sensor>
-</gazebo>
-
-
-第二步：配置夹爪（非常关键）你需要一个夹爪来执行“抓”的动作。由于目前的 URDF 末端只有 link6_1_1 ，你需要：在 URDF 中： 添加夹爪的 URDF（通常是两个平移关节 prismatic 或者旋转关节，挂载在 link6_1_1 上）。在 SRDF (dummy-ros2.srdf) 中：新增一个规划组：<group name="gripper"> ... </group>。指定末端执行器：<end_effector name="gripper_ee" parent_link="link6_1_1" group="gripper"/>。(注意：如果你还没有夹爪的模型，你需要先找一个开源的夹爪模型，比如常用的 robotiq_2f_85，然后把它 include 到你的 xacro 里。)
-第三步：完善启动文件（让机械臂能接收 MoveIt 指令）
-你的 gazebo.launch.py 目前缺少加载 ROS2 Control 控制器的逻辑。为了让 LLM Capstone 的 MTC (MoveIt Task Constructor) 能够控制机械臂，你需要启动 joint_state_broadcaster 和 joint_trajectory_controller。
-
-操作：
-修改你的 gazebo.launch.py，在 delayed_spawn 下方增加控制器启动节点：
-# 启动状态广播器
-    load_joint_state_broadcaster = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=["joint_state_broadcaster"],
-        output="screen",
-    )
-
-    # 启动机械臂轨迹控制器 (需要在你的 config/ros2_controllers.yaml 中定义 dummy_arm_controller)
-    load_arm_controller = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=["dummy_arm_controller"],
-        output="screen",
-    )
-
-    # (未来添加夹爪后) 启动夹爪控制器
-    # load_gripper_controller = Node(...)
-
-    # 修改 return 逻辑，依次延迟启动
-    return LaunchDescription([
-        robot_state_publisher_node,
-        gazebo,
-        delayed_spawn,
-        TimerAction(period=7.0, actions=[load_joint_state_broadcaster]),
-        TimerAction(period=8.0, actions=[load_arm_controller]),
-    ])
-
-目前最紧迫的是夹爪。你手头有 Dummy 机器人配套夹爪的 STL 模型或 URDF 代码吗？
-
-如果有，请发给我，我帮你把它整合进当前的 dummy-ros2.xacro 并配置对应的 ros2_control 接口。
-
-如果没有，你希望我直接为你生成一个标准的、简易的“两指夹爪”代码用于前期跑通流程吗？
-<link name="gripper_base_link">
-  <visual>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="gripper_base_joint" type="fixed">
-  <parent link="link6_1_1"/>
-  <child link="gripper_base_link"/>
-  <origin xyz="0 0 0" rpy="0 0 0"/> 
-</joint>
-
-<link name="left_finger">
-  <visual>
-    <origin xyz="0 0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="right_finger">
-  <visual>
-    <origin xyz="0 -0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 -0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="finger_joint1" type="prismatic">
-  <parent link="gripper_base_link"/>
-  <child link="left_finger"/>
-  <origin xyz="0 0.02 0.04" rpy="0 0 0"/>
-  <axis xyz="0 1 0"/>
-  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
-</joint>
-
-<joint name="finger_joint2" type="prismatic">
-  <parent link="gripper_base_link"/>
-  <child link="right_finger"/>
-  <origin xyz="0 -0.02 0.04" rpy="0 0 0"/>
-  <axis xyz="0 -1 0"/>
-  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
-  <mimic joint="finger_joint1" multiplier="1.0" offset="0.0"/>
-</joint>
-Gemini 说
-你上传的这些代码非常有价值！不过我要先跟你说明一下这些代码的“性质”：
-
-这些代码（dummy_robot.h, dummy_robot.cpp, ascii_protocol.cpp, can_protocol.cpp）是 STM32 单片机的底层固件代码（C++），也就是运行在真实机械臂控制板上的程序。
-
-从你的固件代码中，我为你提取到了这些关键的“抓夹”信息：
-电机配置：你的抓夹是由单个步进电机驱动的（在代码中被定义为 ID 为 7 的 StepHand 类，继承自 CtrlStepMotor）。
-
-运动范围：抓夹的开合角度被映射在 -100 到 100 之间（OpenedAngle=100, ClosedAngle=-100）。
-
-通信指令：在串口/USB协议中，控制抓夹张开的指令是 !HAND_O，闭合是 !HAND_C，位置控制是 !HAND_POS <0-100>。
-
-🚨 现实情况：仿真还需要什么？
-底层固件告诉了我们**“真实电机是怎么转的”，但在 Gazebo 仿真和 ROS2 (MoveIt) 中，我们还需要知道“抓夹长什么样”以及“它的机械结构是怎样的”**。
-
-C++ 代码里没有包含 3D 模型（STL 文件）和运动学结构。为了让 LLM Grasping Capstone 能够计算抓取，MoveIt 必须在仿真里拥有一个带有碰撞体积的物理抓夹。
-
-🚀 我们的解决方案（下一步）
-为了不让你卡在这里，我为你提供最快跑通整个项目的方案：在仿真中先虚拟一个标准的“两指平移抓夹（Parallel Gripper）”。
-
-请将以下代码直接追加到你之前发给我的 dummy-ros2.xacro 文件中（放在 </robot> 标签之前）。这段代码会用简单的几何体（方块）为你生成一个抓夹，MoveIt 就能基于它进行抓取规划了！
-
-1. 将虚拟抓夹加入 URDF (dummy-ros2.xacro)
-XML
-<link name="gripper_base_link">
-  <visual>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="gripper_base_joint" type="fixed">
-  <parent link="link6_1_1"/>
-  <child link="gripper_base_link"/>
-  <origin xyz="0 0 0" rpy="0 0 0"/> 
-</joint>
-
-<link name="left_finger">
-  <visual>
-    <origin xyz="0 0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="right_finger">
-  <visual>
-    <origin xyz="0 -0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 -0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="finger_joint1" type="prismatic">
-  <parent link="gripper_base_link"/>
-  <child link="left_finger"/>
-  <origin xyz="0 0.02 0.04" rpy="0 0 0"/>
-  <axis xyz="0 1 0"/>
-  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
-</joint>
-
-<joint name="finger_joint2" type="prismatic">
-  <parent link="gripper_base_link"/>
-  <child link="right_finger"/>
-  <origin xyz="0 -0.02 0.04" rpy="0 0 0"/>
-  <axis xyz="0 -1 0"/>
-  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
-  <mimic joint="finger_joint1" multiplier="1.0" offset="0.0"/>
-</joint>
-2. 在 ros2_control 标签中暴露抓夹控制器
-在你的 dummy-ros2.xacro 文件底部的 <ros2_control> 块中，添加对手指的控制（就在 <joint name="Joint6">... 下面）：
-<joint name="finger_joint1">
-    <command_interface name="position">
-      <param name="min">0.0</param>
-      <param name="max">0.03</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-看来你已经准备好大干一场了！既然我们已经在 URDF 中加入了相机和虚拟抓夹，下一步就是让 **MoveIt 认识它们**。
-
-在 ROS2 中，`SRDF` (Semantic Robot Description Format) 文件的作用就是告诉 MoveIt：“哪些关节组成手臂”、“哪些部分是抓夹”，以及“什么是张开/闭合状态”。这对你后续迁移 LLM Grasping Capstone 项目（特别是使用 MTC 任务构造器）至关重要。
-
-请打开你之前上传的 `dummy-ros2.srdf` 文件，按照以下 3 个步骤进行修改：
-
-### 第一步：定义抓夹规划组 (Group) 和末端执行器 (End Effector)
-
-在 `dummy-ros2.srdf` 中找到 `<group name="dummy_arm"> ... </group>` 这段代码。在它**紧接着的下方**，加入抓夹的定义：
-
-```xml
-    <group name="gripper">
-        <link name="gripper_base_link"/>
-        <link name="left_finger"/>
-        <link name="right_finger"/>
-        <joint name="finger_joint1"/>
-    </group>
-
-    <end_effector name="dummy_gripper" parent_link="link6_1_1" group="gripper" parent_group="dummy_arm"/>
-```
-
-### 第二步：定义抓夹的“张开”和“闭合”状态
-
-MoveIt Task Constructor (MTC) 在执行抓取时，非常依赖预设好的状态名（比如直接调用 `open` 状态来松开物体）。
-
-在你现有的 `<group_state name="reset" group="dummy_arm"> ... </group_state>` **下方**，加入抓夹的状态定义：
-
-```xml
-    <group_state name="open" group="gripper">
-        <joint name="finger_joint1" value="0.03"/>
-    </group_state>
-    <group_state name="close" group="gripper">
-        <joint name="finger_joint1" value="0.0"/>
-    </group_state>
-```
-
-### 第三步：更新免碰撞矩阵 (Disable Collisions)
-
-由于我们新加了抓夹部件（`gripper_base_link`, `left_finger`, `right_finger`）和相机（`camera_link`），我们需要告诉 MoveIt 忽略它们之间必然会发生的“相邻碰撞”，否则 MoveIt 会认为机器人处于“自碰撞”状态而拒绝规划任何路径。
-
-在文件末尾的 `<disable_collisions ... />` 列表**最下方**，追加以下内容：
-
-```xml
-    <disable_collisions link1="link6_1_1" link2="gripper_base_link" reason="Adjacent"/>
-    <disable_collisions link1="gripper_base_link" link2="left_finger" reason="Adjacent"/>
-    <disable_collisions link1="gripper_base_link" link2="right_finger" reason="Adjacent"/>
-    <disable_collisions link1="link6_1_1" link2="left_finger" reason="Never"/>
-    <disable_collisions link1="link6_1_1" link2="right_finger" reason="Never"/>
-    <disable_collisions link1="left_finger" link2="right_finger" reason="Never"/>
-    
-    <disable_collisions link1="base_link" link2="camera_link" reason="Adjacent"/>
-```
-
----
-
-### 保存并验证
-
-现在，你的 Dummy 机械臂在逻辑上已经拥有了一个可以被 MoveIt 规划的抓夹了！
-
-**接下来的关键拼图：ROS2 控制器配置。**
-虽然 MoveIt 知道该怎么规划抓夹的动作，但 Gazebo 仿真器还需要一个 `Controller` 来实际驱动 `finger_joint1` 移动。
-
-你的项目中是否有一个类似于 `ros2_controllers.yaml`（或在 `config` 文件夹下命名类似的文件）？如果有，请发给我，我帮你把抓夹的 `JointTrajectoryController` 加进去。如果没有，需要我为你写一份标准的控制器配置文件吗？
-[cite_start]这些文件非常标准！它们显然是通过 MoveIt Setup Assistant 生成的。你上传的这些配置文件涵盖了从“底层控制 (ros2_control)”到“上层规划 (MoveIt)”的整个通讯链路 [cite: 14, 23, 26, 29]。
-
-为了让 MoveIt 和 Gazebo 能够驱动我们刚刚在 URDF 中添加的“虚拟抓夹”，我们需要依次修改其中的 **5 个文件**。
-
-请按照以下步骤，把代码直接覆盖或添加到你对应的文件中：
-
-### 1. 修改 `dummy-ros2.srdf`（告诉 MoveIt 抓夹的结构）
-[cite_start]这个文件定义了机器人的“语义”信息 [cite: 24]。
-* [cite_start]**找到:** `<group name="dummy_arm"> ... </group>` [cite: 29]
-* **在它下方插入:**
-```xml
-    <group name="gripper">
-        <link name="gripper_base_link"/>
-        <link name="left_finger"/>
-        <link name="right_finger"/>
-        <joint name="finger_joint1"/>
-    </group>
-    <end_effector name="dummy_gripper" parent_link="link6_1_1" group="gripper" parent_group="dummy_arm"/>
-```
-* [cite_start]**找到:** `<group_state name="reset" group="dummy_arm"> ... </group_state>` [cite: 29]
-* **在它下方插入:**
-```xml
-    <group_state name="open" group="gripper">
-        <joint name="finger_joint1" value="0.03"/>
-    </group_state>
-    <group_state name="close" group="gripper">
-        <joint name="finger_joint1" value="0.0"/>
-    </group_state>
-```
-* [cite_start]**找到:** 文件最底部的 `<disable_collisions ... />` 列表 [cite: 31, 33]。
-* **在 `<robot>` 结束标签前，追加:**
-```xml
-    <disable_collisions link1="link6_1_1" link2="gripper_base_link" reason="Adjacent"/>
-    <disable_collisions link1="gripper_base_link" link2="left_finger" reason="Adjacent"/>
-    <disable_collisions link1="gripper_base_link" link2="right_finger" reason="Adjacent"/>
-    <disable_collisions link1="link6_1_1" link2="left_finger" reason="Never"/>
-    <disable_collisions link1="link6_1_1" link2="right_finger" reason="Never"/>
-    <disable_collisions link1="left_finger" link2="right_finger" reason="Never"/>
-    <disable_collisions link1="base_link" link2="camera_link" reason="Adjacent"/>
-```
-
----
-
-### 2. 修改 `ros2_controllers.yaml`（创建底层控制器）
-这个文件负责在系统中生成控制器节点。我们需要为抓夹新增一个轨迹控制器。
-* **在 `controller_manager -> ros__parameters` 下面，增加 `gripper_controller`：**
-```yaml
-controller_manager:
-  ros__parameters:
-    update_rate: 100
-    
-    joint_state_broadcaster:
-      type: joint_state_broadcaster/JointStateBroadcaster
-    
-    arm_controller:
-      type: joint_trajectory_controller/JointTrajectoryController
-      
-    gripper_controller:
-      type: joint_trajectory_controller/JointTrajectoryController
-```
-* **在文件最底部，添加抓夹控制器的具体参数：**
-```yaml
-gripper_controller:
-  ros__parameters:
-    joints:
-      - finger_joint1
-    command_interfaces:
-      - position
-    state_interfaces:
-      - position
-      - velocity
-```
-
----
-
-### 3. 修改 `moveit_controllers.yaml`（连接 MoveIt 与底层）
-这个文件告诉 MoveIt 把抓取指令发送给哪个底层控制器。
-* **修改 `controller_names` 并添加 `gripper_controller` 的定义：**
-```yaml
-moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
-
-moveit_simple_controller_manager:
-  controller_names:
-    - arm_controller
-    - gripper_controller
-
-  arm_controller:
-    action_ns: follow_joint_trajectory
-    type: FollowJointTrajectory
-    default: true
-    joints:
-      - Joint1
-      - Joint2
-      - Joint3
-      - Joint4
-      - Joint5
-      - Joint6
-
-  gripper_controller:
-    action_ns: follow_joint_trajectory
-    type: FollowJointTrajectory
-    default: true
-    joints:
-      - finger_joint1
-```
-
----
-
-### 4. 修改 `initial_positions.yaml`（设置初始状态）
-防止仿真启动时抓夹报错。
-* **在末尾追加 `finger_joint1`：**
-```yaml
-initial_positions:
-  Joint1: 0
-  Joint2: 0
-  Joint3: 0
-  Joint4: 0
-  Joint5: 0
-  Joint6: 0
-  finger_joint1: 0.03
-```
-
----
-
-### 5. 修改 `dummy-ros2.ros2_control.xacro`（硬件接口暴露）
-[cite_start]如果是使用 FakeSystem（假硬件）进行纯仿真测试 [cite: 14, 15]，需要在这里声明抓夹关节。
-* [cite_start]**找到 `<joint name="Joint6"> ... </joint>`** [cite: 21, 22]
-* **在它下方插入：**
-```xml
-            <joint name="finger_joint1">
-                <command_interface name="position"/>
-                <state_interface name="position">
-                  <param name="initial_value">${initial_positions['finger_joint1']}</param>
-                </state_interface>
-                <state_interface name="velocity"/>
-            </joint>
-```
-
----
-
-### 🎉 见证奇迹的时刻！
-
-保存所有文件后，请重新编译你的 ROS2 工作空间：
-```bash
-colcon build --symlink-install
-source install/setup.bash
-```
-
-然后，启动你的 `demo.launch.py` 或者你用来启动 RViz 的 launch 文件（通常由 MoveIt Setup Assistant 生成）。
-
-**如果一切顺利，你应该能在 RViz 的 "MotionPlanning" 插件的 "Planning Group" 下拉菜单中看到 `gripper` 选项！你可以尝试拖动它的滑块，看看抓夹能不能张开和闭合。**
-
-跑起来之后，截图或者告诉我你看到了什么。如果遇到任何红色报错，直接复制粘贴给我，我们马上解决。下一步，我们就开始真正写 **MTC (MoveIt Task Constructor)** 的代码了！
+[move_group-1] [INFO] [1774530937.812462145] [moveit_move_group_capabilities_base.move_group_context]: MoveGroup context initialization complete
+[move_group-1] Loading 'move_group/ApplyPlanningSceneService'...
+[move_group-1] Loading 'move_group/ClearOctomapService'...
+[move_group-1] Loading 'move_group/MoveGroupCartesianPathService'...
+[move_group-1] Loading 'move_group/MoveGroupExecuteTrajectoryAction'...
+[move_group-1] Loading 'move_group/MoveGroupGetPlanningSceneService'...
+[move_group-1] Loading 'move_group/MoveGroupKinematicsService'...
+[move_group-1] Loading 'move_group/MoveGroupMoveAction'...
+[move_group-1] Loading 'move_group/MoveGroupPlanService'...
+[move_group-1] Loading 'move_group/MoveGroupQueryPlannersService'...
+[move_group-1] Loading 'move_group/MoveGroupStateValidationService'...
+[move_group-1] 
+[move_group-1] You can start planning now!
+[move_group-1] 
+[rviz2-2] [INFO] [1774530938.379804950] [rviz2]: Stereo is NOT SUPPORTED
+[rviz2-2] [INFO] [1774530938.380001202] [rviz2]: OpenGl version: 3.3 (GLSL 3.3)
+[rviz2-2] [INFO] [1774530938.416605647] [rviz2]: Stereo is NOT SUPPORTED
+[rviz2-2] Warning: class_loader.impl: SEVERE WARNING!!! A namespace collision has occurred with plugin factory for class rviz_default_plugins::displays::InteractiveMarkerDisplay. New factory will OVERWRITE existing one. This situation occurs when libraries containing plugins are directly linked against an executable (the one running right now generating this message). Please separate plugins out into their own library or just don't link against the library and use either class_loader::ClassLoader/MultiLibraryClassLoader to open.
+[rviz2-2]          at line 253 in /opt/ros/humble/include/class_loader/class_loader/class_loader_core.hpp
+[rviz2-2] [ERROR] [1774530941.519020247] [moveit_ros_visualization.motion_planning_frame]: Action server: /recognize_objects not available
+[rviz2-2] [INFO] [1774530941.532089603] [moveit_ros_visualization.motion_planning_frame]: MoveGroup namespace changed: / -> . Reloading params.
+[rviz2-2] Error:   Link 'gripper_base_link' declared as part of group 'gripper' is not known to the URDF
+[rviz2-2]          at line 166 in ./src/model.cpp
+[rviz2-2] Error:   Link 'left_finger' declared as part of group 'gripper' is not known to the URDF
+[rviz2-2]          at line 166 in ./src/model.cpp
+[rviz2-2] Error:   Link 'right_finger' declared as part of group 'gripper' is not known to the URDF
+[rviz2-2]          at line 166 in ./src/model.cpp
+[rviz2-2] Error:   Joint 'finger_joint1' declared as part of group 'gripper' is not known to the URDF
+[rviz2-2]          at line 185 in ./src/model.cpp
+[rviz2-2] Warning: Group 'gripper' is empty.
+[rviz2-2]          at line 262 in ./src/model.cpp
+[rviz2-2] Error:   Joint 'finger_joint1' declared as part of group state 'open' is not known to the URDF
+[rviz2-2]          at line 363 in ./src/model.cpp
+[rviz2-2] Error:   Joint 'finger_joint1' declared as part of group state 'close' is not known to the URDF
+[rviz2-2]          at line 363 in ./src/model.cpp
+[rviz2-2] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 594 in ./src/model.cpp
+[rviz2-2] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 589 in ./src/model.cpp
+[rviz2-2] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 589 in ./src/model.cpp
+[rviz2-2] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 594 in ./src/model.cpp
+[rviz2-2] Warning: Link 'right_finger' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 594 in ./src/model.cpp
+[rviz2-2] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 589 in ./src/model.cpp
+[rviz2-2] Warning: Link 'camera_link' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 594 in ./src/model.cpp
+[rviz2-2] [INFO] [1774530941.618428042] [moveit_rdf_loader.rdf_loader]: Loaded robot model in 0 seconds
+[rviz2-2] [INFO] [1774530941.618470522] [moveit_robot_model.robot_model]: Loading robot model 'dummy-ros2'...
+[rviz2-2] [WARN] [1774530941.671108422] [moveit_robot_model.robot_model]: Group 'gripper' must have at least one valid joint
+[rviz2-2] [WARN] [1774530941.671175149] [moveit_robot_model.robot_model]: Failed to add group 'gripper'
+[rviz2-2] [ERROR] [1774530941.671211438] [moveit_robot_model.robot_model]: Group state 'open' specified for group 'gripper', but that group does not exist
+[rviz2-2] [ERROR] [1774530941.671215405] [moveit_robot_model.robot_model]: Group state 'close' specified for group 'gripper', but that group does not exist
+[rviz2-2] [INFO] [1774530941.828507588] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting planning scene monitor
+[rviz2-2] [INFO] [1774530941.831445324] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/monitored_planning_scene'
+[rviz2-2] [ERROR] [1774530941.898576126] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774530941.898765145] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774530941.906291410] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
+[rviz2-2] 
+[rviz2-2] [ERROR] [1774530941.909352050] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774530941.909505230] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774530941.909639415] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
+[rviz2-2] 
+[rviz2-2] [INFO] [1774530941.915656145] [interactive_marker_display_101923465174800]: Connected on namespace: /rviz_moveit_motion_planning_display/robot_interaction_interactive_marker_topic
+[rviz2-2] [ERROR] [1774530941.917384776] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774530941.917526034] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774530941.917746131] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
+[rviz2-2] 
+[rviz2-2] [ERROR] [1774530941.919601032] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774530941.919829285] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774530941.920039865] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
+[rviz2-2] 
+[rviz2-2] [ERROR] [1774530941.920529454] [moveit_robot_model.robot_model]: Group 'gripper' not found in model 'dummy-ros2'
+[rviz2-2] [ERROR] [1774530941.921717108] [moveit_robot_model.robot_model]: Group 'gripper' not found in model 'dummy-ros2'
+[rviz2-2] [INFO] [1774530941.932787450] [interactive_marker_display_101923465174800]: Sending request for interactive markers
+[rviz2-2] [INFO] [1774530941.993395552] [interactive_marker_display_101923465174800]: Service response received for initialization
+[rviz2-2] [INFO] [1774530942.009912080] [moveit_ros_visualization.motion_planning_frame]: group dummy_arm
+[rviz2-2] [INFO] [1774530942.009940544] [moveit_ros_visualization.motion_planning_frame]: Constructing new MoveGroup connection for group 'dummy_arm' in namespace ''
+[rviz2-2] [INFO] [1774530942.024667946] [move_group_interface]: Ready to take commands for planning group dummy_arm.
+[rviz2-2] [ERROR] [1774530942.025548728] [moveit_robot_model.robot_model]: Group 'gripper' not found in model 'dummy-ros2'
+[ERROR] [rviz2-2]: process has died [pid 16486, exit code -11, cmd '/opt/ros/humble/lib/rviz2/rviz2 -d /home/user/dummy_ws/install/dummy_moveit_config/share/dummy_moveit_config/config/moveit.rviz --ros-args -r __node:=rviz2 --params-file /tmp/launch_params_ayyt1cwq --params-file /tmp/launch_params_z5woi7a0 --params-file /tmp/launch_params_i_0aquaz --params-file /tmp/launch_params_uiqfvbq6 --params-file /tmp/launch_params_wja_ktc1'].
