@@ -1,425 +1,208 @@
-<?xml version="1.0" ?>
-<robot name="dummy-ros2" xmlns:xacro="http://www.ros.org/wiki/xacro">
+user@user-virtual-machine:~$ cd ~/dummy_ws
+colcon build
+source install/setup.bash
+ros2 launch dummy_moveit_config demo.launch.py
+Starting >>> dummy-ros2_description
+Starting >>> simulink_motor_controller
+[0.579s] WARNING:colcon.colcon_ros.task.ament_python.build:Package 'dummy-ros2_description' doesn't explicitly install a marker in the package index (colcon-ros currently does it implicitly but that fallback will be removed in the future)
+[0.579s] WARNING:colcon.colcon_ros.task.ament_python.build:Package 'dummy-ros2_description' doesn't explicitly install the 'package.xml' file (colcon-ros currently does it implicitly but that fallback will be removed in the future)
+--- stderr: dummy-ros2_description                                   
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/colcon_core/executor/__init__.py", line 91, in __call__
+    rc = await self.task(*args, **kwargs)
+  File "/usr/lib/python3/dist-packages/colcon_core/task/__init__.py", line 93, in __call__
+    return await task_method(*args, **kwargs)
+  File "/usr/lib/python3/dist-packages/colcon_ros/task/ament_python/build.py", line 102, in build
+    return await extension.build(additional_hooks=additional_hooks)
+  File "/usr/lib/python3/dist-packages/colcon_core/task/python/build.py", line 96, in build
+    available_commands = await self._get_available_commands(
+  File "/usr/lib/python3/dist-packages/colcon_core/task/python/build.py", line 194, in _get_available_commands
+    output = await check_output(
+  File "/usr/lib/python3/dist-packages/colcon_core/subprocess.py", line 129, in check_output
+    assert not rc, f'Expected {args} to pass: {stderr_data}'
+AssertionError: Expected ['/usr/bin/python3', '-W', 'ignore:setup.py install is deprecated', '-W', 'ignore:easy_install command is deprecated', 'setup.py', '--help-commands'] to pass: /usr/bin/python3: can't open file '/home/user/dummy_ws/src/dummy-ros2_description/setup.py': [Errno 2] No such file or directory
 
-<xacro:include filename="$(find dummy-ros2_description)/urdf/materials.xacro" />
-<xacro:include filename="$(find dummy-ros2_description)/urdf/dummy-ros2.trans" />
-<xacro:include filename="$(find dummy-ros2_description)/urdf/dummy-ros2.gazebo" />
-<link name="world" />
-<joint name="world_joint" type="fixed">
-  <parent link="world" />
-  <child link = "base_link" />
-  <origin xyz="0.0 0.0 0.0" rpy="3.1415926536 3.1415926536 0.0" />
-</joint>
+---
+Failed   <<< dummy-ros2_description [0.30s, exited with code 1]
+Aborted  <<< simulink_motor_controller [0.65s]                     
 
-<link name="base_link">
-  <inertial>
-    <origin xyz="-0.019286443307707055 0.0005817485706867557 0.05546290448958129" rpy="0 0 0"/>
-    <mass value="3.4054232030550327"/>
-    <inertia ixx="0.006318" iyy="0.00644" izz="0.006723" ixy="-1.1e-05" iyz="-0.000164" ixz="-2e-06"/>
-  </inertial>
-  <visual>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+Summary: 0 packages finished [1.11s]
+  1 package failed: dummy-ros2_description
+  1 package aborted: simulink_motor_controller
+  1 package had stderr output: dummy-ros2_description
+  1 package not processed
+Expected ['/usr/bin/python3', '-W', 'ignore:setup.py install is deprecated', '-W', 'ignore:easy_install command is deprecated', 'setup.py', '--help-commands'] to pass: /usr/bin/python3: can't open file '/home/user/dummy_ws/src/dummy-ros2_description/setup.py': [Errno 2] No such file or directory
 
-<link name="link1_1_1">
-  <inertial>
-    <origin xyz="-0.005744742318232344 0.005464327027038366 0.012045619429015192" rpy="0 0 0"/>
-    <mass value="0.4000119946706078"/>
-    <inertia ixx="0.000172" iyy="0.000152" izz="0.00025" ixy="5.8e-05" iyz="-3.9e-05" ixz="2.7e-05"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.019225 0.000523 -0.100684" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link1_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.019225 0.000523 -0.100684" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link1_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+[INFO] [launch]: All log files can be found below /home/user/.ros/log/2026-03-26-21-23-08-594223-user-virtual-machine-17566
+[INFO] [launch]: Default logging verbosity is set to INFO
+Using load_yaml() directly is deprecated. Use xacro.load_yaml() instead.
+[INFO] [move_group-1]: process started with pid [17569]
+[INFO] [rviz2-2]: process started with pid [17571]
+[move_group-1] Error:   Link 'gripper_base_link' declared as part of group 'gripper' is not known to the URDF
+[move_group-1]          at line 166 in ./src/model.cpp
+[move_group-1] Error:   Link 'left_finger' declared as part of group 'gripper' is not known to the URDF
+[move_group-1]          at line 166 in ./src/model.cpp
+[move_group-1] Error:   Link 'right_finger' declared as part of group 'gripper' is not known to the URDF
+[move_group-1]          at line 166 in ./src/model.cpp
+[move_group-1] Error:   Joint 'finger_joint1' declared as part of group 'gripper' is not known to the URDF
+[move_group-1]          at line 185 in ./src/model.cpp
+[move_group-1] Warning: Group 'gripper' is empty.
+[move_group-1]          at line 262 in ./src/model.cpp
+[move_group-1] Error:   Joint 'finger_joint1' declared as part of group state 'open' is not known to the URDF
+[move_group-1]          at line 363 in ./src/model.cpp
+[move_group-1] Error:   Joint 'finger_joint1' declared as part of group state 'close' is not known to the URDF
+[move_group-1]          at line 363 in ./src/model.cpp
+[move_group-1] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
+[move_group-1]          at line 594 in ./src/model.cpp
+[move_group-1] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
+[move_group-1]          at line 589 in ./src/model.cpp
+[move_group-1] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
+[move_group-1]          at line 589 in ./src/model.cpp
+[move_group-1] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
+[move_group-1]          at line 594 in ./src/model.cpp
+[move_group-1] Warning: Link 'right_finger' is not known to URDF. Cannot disable/enable collisons.
+[move_group-1]          at line 594 in ./src/model.cpp
+[move_group-1] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
+[move_group-1]          at line 589 in ./src/model.cpp
+[move_group-1] Warning: Link 'camera_link' is not known to URDF. Cannot disable/enable collisons.
+[move_group-1]          at line 594 in ./src/model.cpp
+[move_group-1] [INFO] [1774531388.918663457] [moveit_rdf_loader.rdf_loader]: Loaded robot model in 0 seconds
+[move_group-1] [INFO] [1774531388.919110987] [moveit_robot_model.robot_model]: Loading robot model 'dummy-ros2'...
+[move_group-1] [WARN] [1774531388.977696489] [moveit_robot_model.robot_model]: Group 'gripper' must have at least one valid joint
+[move_group-1] [WARN] [1774531388.977736161] [moveit_robot_model.robot_model]: Failed to add group 'gripper'
+[move_group-1] [ERROR] [1774531388.977767097] [moveit_robot_model.robot_model]: Group state 'open' specified for group 'gripper', but that group does not exist
+[move_group-1] [ERROR] [1774531388.977771104] [moveit_robot_model.robot_model]: Group state 'close' specified for group 'gripper', but that group does not exist
+[move_group-1] [INFO] [1774531389.349640431] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Publishing maintained planning scene on 'monitored_planning_scene'
+[move_group-1] [INFO] [1774531389.350511817] [moveit.ros_planning_interface.moveit_cpp]: Listening to 'joint_states' for joint states
+[move_group-1] [INFO] [1774531389.352383710] [moveit_ros.current_state_monitor]: Listening to joint states on topic 'joint_states'
+[move_group-1] [INFO] [1774531389.354540552] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/attached_collision_object' for attached collision objects
+[move_group-1] [INFO] [1774531389.354572780] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting planning scene monitor
+[move_group-1] [INFO] [1774531389.355333816] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/planning_scene'
+[move_group-1] [INFO] [1774531389.355350817] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting world geometry update monitor for collision objects, attached objects, octomap updates.
+[move_group-1] [INFO] [1774531389.356645529] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to 'collision_object'
+[move_group-1] [INFO] [1774531389.359066308] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to 'planning_scene_world' for planning scene world geometry
+[move_group-1] [WARN] [1774531389.361723605] [moveit.ros.occupancy_map_monitor.middleware_handle]: Resolution not specified for Octomap. Assuming resolution = 0.1 instead
+[move_group-1] [ERROR] [1774531389.361773725] [moveit.ros.occupancy_map_monitor.middleware_handle]: No 3D sensor plugin(s) defined for octomap updates
+[move_group-1] [INFO] [1774531389.445717008] [moveit.ros_planning_interface.moveit_cpp]: Loading planning pipeline 'ompl'
+[move_group-1] [INFO] [1774531389.455042115] [moveit.ros_planning.planning_pipeline]: Using planning interface 'OMPL'
+[move_group-1] [INFO] [1774531389.456724719] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.path_tolerance' was not set. Using default value: 0.100000
+[move_group-1] [INFO] [1774531389.456768298] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.resample_dt' was not set. Using default value: 0.100000
+[move_group-1] [INFO] [1774531389.456773077] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.min_angle_change' was not set. Using default value: 0.001000
+[move_group-1] [INFO] [1774531389.456788394] [moveit_ros.fix_workspace_bounds]: Param 'ompl.default_workspace_bounds' was not set. Using default value: 10.000000
+[move_group-1] [INFO] [1774531389.456799955] [moveit_ros.fix_start_state_bounds]: Param 'ompl.start_state_max_bounds_error' was set to 0.100000
+[move_group-1] [INFO] [1774531389.456804363] [moveit_ros.fix_start_state_bounds]: Param 'ompl.start_state_max_dt' was not set. Using default value: 0.500000
+[move_group-1] [INFO] [1774531389.456811817] [moveit_ros.fix_start_state_collision]: Param 'ompl.start_state_max_dt' was not set. Using default value: 0.500000
+[move_group-1] [INFO] [1774531389.456816255] [moveit_ros.fix_start_state_collision]: Param 'ompl.jiggle_fraction' was set to 0.050000
+[move_group-1] [INFO] [1774531389.456820472] [moveit_ros.fix_start_state_collision]: Param 'ompl.max_sampling_attempts' was not set. Using default value: 100
+[move_group-1] [INFO] [1774531389.456828276] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Add Time Optimal Parameterization'
+[move_group-1] [INFO] [1774531389.456832204] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Resolve constraint frames to robot links'
+[move_group-1] [INFO] [1774531389.456834999] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Workspace Bounds'
+[move_group-1] [INFO] [1774531389.456866966] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State Bounds'
+[move_group-1] [INFO] [1774531389.456870062] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State In Collision'
+[move_group-1] [INFO] [1774531389.456872607] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State Path Constraints'
+[move_group-1] [INFO] [1774531389.486621708] [moveit.plugins.moveit_simple_controller_manager]: Added FollowJointTrajectory controller for arm_controller
+[move_group-1] [INFO] [1774531389.488914054] [moveit.plugins.moveit_simple_controller_manager]: Added FollowJointTrajectory controller for gripper_controller
+[move_group-1] [INFO] [1774531389.489201334] [moveit.plugins.moveit_simple_controller_manager]: Returned 2 controllers in list
+[move_group-1] [INFO] [1774531389.489226760] [moveit.plugins.moveit_simple_controller_manager]: Returned 2 controllers in list
+[move_group-1] [INFO] [1774531389.490934579] [moveit_ros.trajectory_execution_manager]: Trajectory execution is managing controllers
+[move_group-1] [INFO] [1774531389.490954485] [move_group.move_group]: MoveGroup debug mode is ON
+[move_group-1] [INFO] [1774531389.511671078] [move_group.move_group]: 
+[move_group-1] 
+[move_group-1] ********************************************************
+[move_group-1] * MoveGroup using: 
+[move_group-1] *     - ApplyPlanningSceneService
+[move_group-1] *     - ClearOctomapService
+[move_group-1] *     - CartesianPathService
+[move_group-1] *     - ExecuteTrajectoryAction
+[move_group-1] *     - GetPlanningSceneService
+[move_group-1] *     - KinematicsService
+[move_group-1] *     - MoveAction
+[move_group-1] *     - MotionPlanService
+[move_group-1] *     - QueryPlannersService
+[move_group-1] *     - StateValidationService
+[move_group-1] ********************************************************
+[move_group-1] 
+[move_group-1] [INFO] [1774531389.511725346] [moveit_move_group_capabilities_base.move_group_context]: MoveGroup context using planning plugin ompl_interface/OMPLPlanner
+[move_group-1] [INFO] [1774531389.511733480] [moveit_move_group_capabilities_base.move_group_context]: MoveGroup context initialization complete
+[move_group-1] Loading 'move_group/ApplyPlanningSceneService'...
+[move_group-1] Loading 'move_group/ClearOctomapService'...
+[move_group-1] Loading 'move_group/MoveGroupCartesianPathService'...
+[move_group-1] Loading 'move_group/MoveGroupExecuteTrajectoryAction'...
+[move_group-1] Loading 'move_group/MoveGroupGetPlanningSceneService'...
+[move_group-1] Loading 'move_group/MoveGroupKinematicsService'...
+[move_group-1] Loading 'move_group/MoveGroupMoveAction'...
+[move_group-1] Loading 'move_group/MoveGroupPlanService'...
+[move_group-1] Loading 'move_group/MoveGroupQueryPlannersService'...
+[move_group-1] Loading 'move_group/MoveGroupStateValidationService'...
+[move_group-1] 
+[move_group-1] You can start planning now!
+[move_group-1] 
+[rviz2-2] [INFO] [1774531390.238066258] [rviz2]: Stereo is NOT SUPPORTED
+[rviz2-2] [INFO] [1774531390.238274705] [rviz2]: OpenGl version: 3.3 (GLSL 3.3)
+[rviz2-2] [INFO] [1774531390.274487123] [rviz2]: Stereo is NOT SUPPORTED
+[rviz2-2] Warning: class_loader.impl: SEVERE WARNING!!! A namespace collision has occurred with plugin factory for class rviz_default_plugins::displays::InteractiveMarkerDisplay. New factory will OVERWRITE existing one. This situation occurs when libraries containing plugins are directly linked against an executable (the one running right now generating this message). Please separate plugins out into their own library or just don't link against the library and use either class_loader::ClassLoader/MultiLibraryClassLoader to open.
+[rviz2-2]          at line 253 in /opt/ros/humble/include/class_loader/class_loader/class_loader_core.hpp
+[rviz2-2] [ERROR] [1774531393.378126123] [moveit_ros_visualization.motion_planning_frame]: Action server: /recognize_objects not available
+[rviz2-2] [INFO] [1774531393.390015305] [moveit_ros_visualization.motion_planning_frame]: MoveGroup namespace changed: / -> . Reloading params.
+[rviz2-2] Error:   Link 'gripper_base_link' declared as part of group 'gripper' is not known to the URDF
+[rviz2-2]          at line 166 in ./src/model.cpp
+[rviz2-2] Error:   Link 'left_finger' declared as part of group 'gripper' is not known to the URDF
+[rviz2-2]          at line 166 in ./src/model.cpp
+[rviz2-2] Error:   Link 'right_finger' declared as part of group 'gripper' is not known to the URDF
+[rviz2-2]          at line 166 in ./src/model.cpp
+[rviz2-2] Error:   Joint 'finger_joint1' declared as part of group 'gripper' is not known to the URDF
+[rviz2-2]          at line 185 in ./src/model.cpp
+[rviz2-2] Warning: Group 'gripper' is empty.
+[rviz2-2]          at line 262 in ./src/model.cpp
+[rviz2-2] Error:   Joint 'finger_joint1' declared as part of group state 'open' is not known to the URDF
+[rviz2-2]          at line 363 in ./src/model.cpp
+[rviz2-2] Error:   Joint 'finger_joint1' declared as part of group state 'close' is not known to the URDF
+[rviz2-2]          at line 363 in ./src/model.cpp
+[rviz2-2] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 594 in ./src/model.cpp
+[rviz2-2] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 589 in ./src/model.cpp
+[rviz2-2] Warning: Link 'gripper_base_link' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 589 in ./src/model.cpp
+[rviz2-2] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 594 in ./src/model.cpp
+[rviz2-2] Warning: Link 'right_finger' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 594 in ./src/model.cpp
+[rviz2-2] Warning: Link 'left_finger' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 589 in ./src/model.cpp
+[rviz2-2] Warning: Link 'camera_link' is not known to URDF. Cannot disable/enable collisons.
+[rviz2-2]          at line 594 in ./src/model.cpp
+[rviz2-2] [INFO] [1774531393.462339097] [moveit_rdf_loader.rdf_loader]: Loaded robot model in 0.1 seconds
+[rviz2-2] [INFO] [1774531393.462379891] [moveit_robot_model.robot_model]: Loading robot model 'dummy-ros2'...
+[rviz2-2] [WARN] [1774531393.536031566] [moveit_robot_model.robot_model]: Group 'gripper' must have at least one valid joint
+[rviz2-2] [WARN] [1774531393.536076948] [moveit_robot_model.robot_model]: Failed to add group 'gripper'
+[rviz2-2] [ERROR] [1774531393.536110429] [moveit_robot_model.robot_model]: Group state 'open' specified for group 'gripper', but that group does not exist
+[rviz2-2] [ERROR] [1774531393.536114666] [moveit_robot_model.robot_model]: Group state 'close' specified for group 'gripper', but that group does not exist
+[rviz2-2] [INFO] [1774531393.717022941] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting planning scene monitor
+[rviz2-2] [INFO] [1774531393.718142297] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/monitored_planning_scene'
+[rviz2-2] [ERROR] [1774531393.782835853] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774531393.783080375] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774531393.789709280] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
+[rviz2-2] 
+[rviz2-2] [ERROR] [1774531393.792633361] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774531393.792787580] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774531393.792916954] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
+[rviz2-2] 
+[rviz2-2] [INFO] [1774531393.799259620] [interactive_marker_display_93837090812976]: Connected on namespace: /rviz_moveit_motion_planning_display/robot_interaction_interactive_marker_topic
+[rviz2-2] [ERROR] [1774531393.800881845] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774531393.801007813] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774531393.801188280] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
+[rviz2-2] 
+[rviz2-2] [ERROR] [1774531393.803096873] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774531393.803233360] [rviz2]: Could not load resource [file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl]: Unable to open file "file:///home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/meshes/link5_1_1. stl".
+[rviz2-2] [ERROR] [1774531393.803479505] [rviz2]: The link link6_1_1 is has unrealistic inertia, so the equivalent inertia box will not be shown.
+[rviz2-2] 
+[rviz2-2] [ERROR] [1774531393.803845057] [moveit_robot_model.robot_model]: Group 'gripper' not found in model 'dummy-ros2'
+[rviz2-2] [ERROR] [1774531393.804445904] [moveit_robot_model.robot_model]: Group 'gripper' not found in model 'dummy-ros2'
+[rviz2-2] [INFO] [1774531393.811122485] [moveit_ros_visualization.motion_planning_frame]: group dummy_arm
+[rviz2-2] [INFO] [1774531393.811165382] [moveit_ros_visualization.motion_planning_frame]: Constructing new MoveGroup connection for group 'dummy_arm' in namespace ''
+[rviz2-2] [INFO] [1774531393.818431329] [interactive_marker_display_93837090812976]: Sending request for interactive markers
+[rviz2-2] [INFO] [1774531393.829089023] [move_group_interface]: Ready to take commands for planning group dummy_arm.
+[rviz2-2] [ERROR] [1774531393.830182682] [moveit_robot_model.robot_model]: Group 'gripper' not found in model 'dummy-ros2'
+[ERROR] [rviz2-2]: process has died [pid 17571, exit code -11, cmd '/opt/ros/humble/lib/rviz2/rviz2 -d /home/user/dummy_ws/install/dummy_moveit_config/share/dummy_moveit_config/config/moveit.rviz --ros-args -r __node:=rviz2 --params-file /tmp/launch_params_g6xp5rbq --params-file /tmp/launch_params_o184dki4 --params-file /tmp/launch_params_a72qxgug --params-file /tmp/launch_params_prair0_r --params-file /tmp/launch_params_kgh749wt'].
 
-<link name="link2_1_1">
-  <inertial>
-    <origin xyz="0.022476329402049397 0.0015836740439541114 0.0701478637986927" rpy="0 0 0"/>
-    <mass value="0.9644194016592866"/>
-    <inertia ixx="0.003808" iyy="0.003848" izz="0.000499" ixy="-1e-05" iyz="1.3e-05" ixz="0.000274"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.034725 -0.034477 -0.129184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link2_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.034725 -0.034477 -0.129184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link2_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="link3_1_1">
-  <inertial>
-    <origin xyz="-0.010730263185093621 -0.022369081214190782 0.036467614070683996" rpy="0 0 0"/>
-    <mass value="0.3817226974329336"/>
-    <inertia ixx="0.000328" iyy="0.00037" izz="0.000146" ixy="-2.4e-05" iyz="6.8e-05" ixz="6.5e-05"/>
-  </inertial>
-  <visual>
-    <origin xyz="-0.001925 -0.034477 -0.275184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link3_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="-0.001925 -0.034477 -0.275184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link3_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="link4_1_1">
-  <inertial>
-    <origin xyz="-0.004221306676286125 0.09021372117053507 0.00026828289249919424" rpy="0 0 0"/>
-    <mass value="0.44370009904209484"/>
-    <inertia ixx="0.001103" iyy="0.00012" izz="0.001078" ixy="-3.2e-05" iyz="-1e-06" ixz="1e-06"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.016625 -0.024477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link4_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.016625 -0.024477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link4_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="link5_1_1">
-  <inertial>
-    <origin xyz="-0.0007044959912857188 0.04181588666040692 1.9856549020258463e-05" rpy="0 0 0"/>
-    <mass value="0.1329416987985629"/>
-    <inertia ixx="0.000148" iyy="3.5e-05" izz="0.00016" ixy="3e-05" iyz="-0.0" ixz="0.0"/>
-  </inertial>
-  <visual>
-    <origin xyz="-0.000175 -0.151477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link5_1_1. stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="-0.000175 -0.151477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link5_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="link6_1_1">
-  <inertial>
-    <origin xyz="8.866549679534264e-08 0.001500477150790519 2.701463612808652e-07" rpy="0 0 0"/>
-    <mass value="0.00918018258883941"/>
-    <inertia ixx="0.0" iyy="1e-06" izz="0.0" ixy="0.0" iyz="0.0" ixz="-0.0"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.018331 -0.228477 -0.327078" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link6_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.018331 -0.228477 -0.327078" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link6_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="Joint1" type="revolute">
-  <origin xyz="-0.019225 -0.000523 0.100684" rpy="0 0 0"/>
-  <parent link="base_link"/>
-  <child link="link1_1_1"/>
-  <axis xyz="0.0 -0.0 -1.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
-</joint>
-
-<joint name="Joint2" type="revolute">
-  <origin xyz="-0.0155 0.035 0.0285" rpy="0 0 0"/>
-  <parent link="link1_1_1"/>
-  <child link="link2_1_1"/>
-  <axis xyz="-1.0 -0.0 0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
-</joint>
-
-<joint name="Joint3" type="revolute">
-  <origin xyz="0.03665 0.0 0.146" rpy="0 0 0"/>
-  <parent link="link2_1_1"/>
-  <child link="link3_1_1"/>
-  <axis xyz="-1.0 0.0 -0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
-</joint>
-
-<joint name="Joint4" type="revolute">
-  <origin xyz="-0.01855 -0.01 0.052" rpy="0 0 0"/>
-  <parent link="link3_1_1"/>
-  <child link="link4_1_1"/>
-  <axis xyz="0.0 -1.0 0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
-</joint>
-
-<joint name="Joint5" type="revolute">
-  <origin xyz="0.0168 0.127 0.0" rpy="0 0 0"/>
-  <parent link="link4_1_1"/>
-  <child link="link5_1_1"/>
-  <axis xyz="-1.0 0.0 -0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
-</joint>
-
-<joint name="Joint6" type="revolute">
-  <origin xyz="-0.018506 0.077 -0.000106" rpy="0 0 0"/>
-  <parent link="link5_1_1"/>
-  <child link="link6_1_1"/>
-  <axis xyz="-0.0 -1.0 0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
-</joint>
-
-<!-- ==================== 在这里添加 ROS2 Control ==================== -->
-<ros2_control name="GazeboSystem" type="system">
-  <hardware>
-    <plugin>gazebo_ros2_control/GazeboSystem</plugin>
-  </hardware>
-  
-  <joint name="Joint1">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-
-  <joint name="Joint2">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-
-  <joint name="Joint3">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-
-  <joint name="Joint4">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-
-  <joint name="Joint5">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-
-  <joint name="Joint6">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-<joint name="finger_joint1">
-    <command_interface name="position">
-      <param name="min">0.0</param>
-      <param name="max">0.03</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-</ros2_control>
-<link name="camera_link">
-  <visual>
-    <geometry>
-      <box size="0.05 0.05 0.05"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-</link>
-
-<joint name="camera_joint" type="fixed">
-  <parent link="world"/>
-  <child link="camera_link"/>
-  <origin xyz="0.5 0.0 0.4" rpy="0 0.785 3.1415"/>
-</joint>
-
-<link name="camera_depth_frame"/>
-<joint name="camera_depth_joint" type="fixed">
-  <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
-  <parent link="camera_link"/>
-  <child link="camera_depth_frame"/>
-</joint>
-
-<gazebo reference="camera_link">
-  <sensor type="depth" name="camera">
-    <always_on>true</always_on>
-    <update_rate>15.0</update_rate>
-    <camera>
-      <horizontal_fov>1.047</horizontal_fov>
-      <image>
-        <format>B8G8R8</format>
-        <width>640</width>
-        <height>480</height>
-      </image>
-      <clip>
-        <near>0.1</near>
-        <far>8.0</far>
-      </clip>
-    </camera>
-    <plugin name="camera_plugin" filename="libgazebo_ros_camera.so">
-      <ros>
-        <namespace>/</namespace>
-        <remapping>custom_camera/image_raw:=/camera/color/image_raw</remapping>
-        <remapping>custom_camera/image_depth:=/camera/depth/image_raw</remapping>
-        <remapping>custom_camera/camera_info:=/camera/color/camera_info</remapping>
-      </ros>
-      <camera_name>camera</camera_name>
-      <frame_name>camera_depth_frame</frame_name>
-      <min_depth>0.1</min_depth>
-      <max_depth>8.0</max_depth>
-    </plugin>
-  </sensor>
-</gazebo>
-
-<link name="gripper_base_link">
-  <visual>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="gripper_base_joint" type="fixed">
-  <parent link="link6_1_1"/>
-  <child link="gripper_base_link"/>
-  <origin xyz="0 0 0" rpy="0 0 0"/> 
-</joint>
-
-<link name="left_finger">
-  <visual>
-    <origin xyz="0 0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="right_finger">
-  <visual>
-    <origin xyz="0 -0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 -0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="finger_joint1" type="prismatic">
-  <parent link="gripper_base_link"/>
-  <child link="left_finger"/>
-  <origin xyz="0 0.02 0.04" rpy="0 0 0"/>
-  <axis xyz="0 1 0"/>
-  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
-</joint>
-
-<joint name="finger_joint2" type="prismatic">
-  <parent link="gripper_base_link"/>
-  <child link="right_finger"/>
-  <origin xyz="0 -0.02 0.04" rpy="0 0 0"/>
-  <axis xyz="0 -1 0"/>
-  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
-  <mimic joint="finger_joint1" multiplier="1.0" offset="0.0"/>
-</joint>
-
-</robot>
