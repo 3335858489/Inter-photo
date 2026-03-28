@@ -1,5 +1,143 @@
-Summary: 3 packages finished [1.13s]
-user@user-virtual-machine:~/dummy_ws$ source /opt/ros/humble/setup.bash
-user@user-virtual-machine:~/dummy_ws$ python3 vision_grasp.py
-python3: can't open file '/home/user/dummy_ws/vision_grasp.py': [Errno 2] No such file or directory
-user@user-virtual-machine:~/dummy_ws$ 
+没问题！为了让你不用费心去拼接代码，我把加入了**“AI 视觉目标追踪”**功能的完整版 `vision_grasp.py` 整理好了。
+
+你只需要**清空**之前的 `vision_grasp.py` 文件，把下面这段完整的代码全部粘贴进去，保存即可：
+
+```python
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+
+class VisionGraspNode(Node):
+    def __init__(self):
+        super().__init__('vision_grasp_node')
+        self.bridge = CvBridge()
+        self.latest_depth_image = None
+
+        # 1. 订阅深度图话题
+        self.depth_sub = self.create_subscription(
+            Image,
+            '/camera/rgbd_camera/depth/image_raw',
+            self.depth_callback,
+            10)
+
+        # 2. 订阅彩色图话题
+        self.color_sub = self.create_subscription(
+            Image,
+            '/camera/rgbd_camera/image_raw',
+            self.color_callback,
+            10)
+
+        self.get_logger().info('🟢 视觉抓取追踪节点已启动！请在弹出的窗口查看 AI 识别效果...')
+
+    def depth_callback(self, msg):
+        # 将 ROS 的深度图转换为 OpenCV 可以计算的 32位浮点数矩阵 (单位: 米)
+        try:
+            self.latest_depth_image = self.bridge.imgmsg_to_cv2(msg, "32FC1")
+        except Exception as e:
+            self.get_logger().error(f'深度图转换错误: {e}')
+
+    def color_callback(self, msg):
+        # 必须等深度图准备好，才开始计算
+        if self.latest_depth_image is None:
+            return
+
+        try:
+            # 转换彩色图像格式为 BGR
+            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            h, w, _ = cv_image.shape
+            
+            # ====================================================
+            # 🌟 核心：OpenCV 蓝色物体自动识别与追踪
+            # ====================================================
+            # 1. 转换到 HSV 色彩空间（更容易抵抗光照变化）
+            hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+            
+            # 2. 定义蓝色的 HSV 范围（提取蓝色目标）
+            lower_blue = np.array([100, 150, 0])
+            upper_blue = np.array([140, 255, 255])
+            mask = cv2.inRange(hsv, lower_blue, upper_blue)
+            
+            # 3. 寻找画面中所有蓝色的轮廓
+            contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # 默认准星在中心 (没找到物体时的备用方案)
+            u, v = int(w/2), int(h/2)
+            target_found = False
+
+            if len(contours) > 0:
+                # 找到最大的蓝色轮廓（过滤掉噪点）
+                largest_contour = max(contours, key=cv2.contourArea)
+                
+                # 如果这个蓝色色块足够大（确实是我们的目标方块）
+                if cv2.contourArea(largest_contour) > 100:
+                    # 计算物体的中心像素坐标 (u, v)
+                    M = cv2.moments(largest_contour)
+                    if M["m00"] > 0:
+                        u = int(M["m10"] / M["m00"])
+                        v = int(M["m01"] / M["m00"])
+                        target_found = True
+                        
+                        # 在物体周围画一个炫酷的黄色边界框
+                        x_box, y_box, w_box, h_box = cv2.boundingRect(largest_contour)
+                        cv2.rectangle(cv_image, (x_box, y_box), (x_box + w_box, y_box + h_box), (0, 255, 255), 2)
+            # ====================================================
+
+            # 获取准星处的实际物理距离 (Z 轴距离)
+            z = self.latest_depth_image[v, u]
+
+            # 相机的内参 (根据 640x480 分辨率和 FOV 计算得出)
+            fx, fy = 320.0, 320.0
+            cx, cy = 320.0, 240.0
+
+            # 如果深度值有效，进行 2D 像素到 3D 物理坐标的逆投影
+            if not np.isnan(z) and z > 0.0:
+                # 计算相机坐标系下的 X 和 Y
+                x = (u - cx) * z / fx
+                y = (v - cy) * z / fy
+                
+                # 如果找到了目标，文字显示为绿色，否则显示为橙色提示扫描中
+                color = (0, 255, 0) if target_found else (0, 165, 255)
+                status = "Target Locked" if target_found else "Scanning..."
+                text = f"{status}: (X:{x:.3f}m, Y:{y:.3f}m, Z:{z:.3f}m)"
+                
+                cv2.putText(cv_image, text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            
+            # 画准星 (红色) 始终跟随目标
+            cv2.drawMarker(cv_image, (u, v), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
+
+            # 显示最终画面
+            cv2.imshow("Dummy Robot - Vision AI", cv_image)
+            cv2.waitKey(1)
+
+        except Exception as e:
+            self.get_logger().error(f'彩色图处理错误: {e}')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = VisionGraspNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        cv2.destroyAllWindows()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+### 运行测试：
+
+1. 确保在终端 A 里，带有蓝色小方块的 Gazebo 仿真正在运行。
+2. 在终端 B 里，进入源码目录并运行脚本：
+   ```bash
+   cd ~/dummy_ws/src
+   python3 vision_grasp.py
+   ```
+
+跑起来之后，只要小蓝块出现在视野里，程序就会立刻给它套上黄色的追踪框，并且红色的准星会自动吸附在方块正中心！一旦成功，就可以开始设计下一步：把这个算出来的 3D 坐标发送给 MoveIt 规划层，让机器手去执行抓取动作了。想进入下一步随时告诉我！
