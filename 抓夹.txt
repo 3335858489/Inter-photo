@@ -1,45 +1,50 @@
-user@user-virtual-machine:~$ sudo apt update
-sudo apt install ros-humble-gazebo-ros-pkgs
-[sudo] user 的密码： 
-忽略:1 http://mirrors.tuna.tsinghua. edu.cn/ros2/ubuntu InRelease
-命中:2 http://mirrors.tuna.tsinghua.edu.cn/ubuntu jammy InRelease              
-获取:3 https://packages.microsoft.com/repos/vscode stable InRelease [3,594 B]  
-命中:4 http://security.ubuntu.com/ubuntu jammy-security InRelease
-忽略:5 http://packages.ros.org/ros/ubuntu jammy InRelease
-错误:3 https://packages.microsoft.com/repos/vscode stable InRelease
-  由于没有公钥，无法验证下列签名： NO_PUBKEY EB3E94ADBE1229CF
-命中:6 http://packages.ros.org/ros2/ubuntu jammy InRelease
-忽略:1 http://mirrors.tuna.tsinghua. edu.cn/ros2/ubuntu InRelease
-错误:7 http://packages.ros.org/ros/ubuntu jammy Release
-  404  Not Found [IP: 64.50.233.100 80]
-忽略:1 http://mirrors.tuna.tsinghua. edu.cn/ros2/ubuntu InRelease
-错误:1 http://mirrors.tuna.tsinghua. edu.cn/ros2/ubuntu InRelease
-  无法解析域名“mirrors.tuna.tsinghua.”
-正在读取软件包列表... 完成
-W: GPG 错误：https://packages.microsoft.com/repos/vscode stable InRelease: 由于没有公钥，无法验证下列签名： NO_PUBKEY EB3E94ADBE1229CF
-E: 仓库 “https://packages.microsoft.com/repos/vscode stable InRelease” 没有数字签名。
-N: 无法安全地用该源进行更新，所以默认禁用该源。
-N: 参见 apt-secure(8) 手册以了解仓库创建和用户配置方面的细节。
-E: 仓库 “http://packages.ros.org/ros/ubuntu jammy Release” 没有 Release 文件。
-N: 无法安全地用该源进行更新，所以默认禁用该源。
-N: 参见 apt-secure(8) 手册以了解仓库创建和用户配置方面的细节。
-正在读取软件包列表... 完成
-正在分析软件包的依赖关系树... 完成
-正在读取状态信息... 完成                 
-下列软件包是自动安装的并且现在不需要了：
-  python3-rosdistro python3-rospkg
-使用'sudo apt autoremove'来卸载它(它们)。
-下列软件包将被升级：
-  ros-humble-gazebo-ros-pkgs
-升级了 1 个软件包，新安装了 0 个软件包，要卸载 0 个软件包，有 567 个软件包未被升级。
-需要下载 7,086 B 的归档。
-解压缩后会消耗 0 B 的额外空间。
-错误:1 http://packages.ros.org/ros2/ubuntu jammy/main amd64 ros-humble-gazebo-ros-pkgs amd64 3.9.0-1jammy.20260219.041748
-  404  Not Found [IP: 64.50.236.52 80]
-E: 无法下载 http://packages.ros.org/ros2/ubuntu/pool/main/r/ros-humble-gazebo-ros-pkgs/ros-humble-gazebo-ros-pkgs_3.9.0-1jammy.20260219.041748_amd64.deb  404  Not Found [IP: 64.50.236.52 80]
-E: 有几个软件包无法下载，要不运行 apt-get update 或者加上 --fix-missing 的选项再试试？
-user@user-virtual-machine:~$ source /opt/ros/humble/setup.bash
+别灰心！遇到 Linux 系统的 `apt` 报错绝对是每个机器人开发者的“必经之路”，这非常正常。
+
+我仔细看了你的报错日志，立刻就抓住了“罪魁祸首”——**你的 Ubuntu 软件源配置写错了一个空格，导致整个更新和下载链条崩溃了。**
+
+你看这一行：`无法解析域名“mirrors.tuna.tsinghua. edu.cn”`。里面多了一个致命的空格（`. edu.cn`），并且因为 `apt update` 失败，系统用的是旧缓存，所以去下载插件时报了 `404 Not Found`。
+
+同时，你在运行 `ros2 topic list` 时只看到了 `/parameter_events` 和 `/rosout`，这也是因为此时你的 Gazebo 仿真根本没开（或者开着但没加载插件）。
+
+来，我们用四条命令，快刀斩乱麻地解决这个环境问题！
+
+### 第一步：修复软件源并安装 Gazebo 插件
+请在终端中**依次**复制粘贴并运行以下命令（这是一个强效修复方案，直接重置并修复你的 ROS2 清华源）：
+
+```bash
+# 1. 重新写入正确的清华 ROS2 软件源（解决空格和 404 报错）
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] https://mirrors.tuna.tsinghua.edu.cn/ros2/ubuntu jammy main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# 2. 清理旧的错误缓存
+sudo apt clean
+
+# 3. 重新拉取最新的软件列表
+sudo apt update
+
+# 4. 再次安装 Gazebo 视觉插件库 (加上 --fix-missing 防止意外断连)
+sudo apt install ros-humble-gazebo-ros-pkgs ros-humble-gazebo-plugins --fix-missing -y
+```
+
+*（注：VSCode 和 ROS1 的报错不影响我们现在的开发，可以先忽略。）*
+
+### 第二步：正确验证相机话题
+装完插件后，你需要**同时开两个终端**，才能看到相机发出的画面数据：
+
+**终端 A（启动仿真世界）：**
+```bash
+cd ~/dummy_ws
+source install/setup.bash
+ros2 launch dummy_moveit_config demo.launch.py
+```
+*(等 Gazebo 和 RViz 都完全打开，并且 Gazebo 左下角的时间在走动)*
+
+**终端 B（偷听数据）：**
+```bash
+source /opt/ros/humble/setup.bash
 ros2 topic list
-/parameter_events
-/rosout
-user@user-virtual-machine:~$ 
+```
+这时候，你的列表里一定会冒出 `/camera/rgbd_camera/image_raw` 这样的话题！接着在终端 B 运行 `ros2 run rqt_image_view rqt_image_view` 就能看到画面了。
+
+---
+
+修复好这个系统依赖之后，我们的底层就100%无懈可击了！**你准备好验证之后，让我直接把“视觉感知 (Vision Node)”的 Python 框架代码发给你吗？** 我们可以直接开始写代码识别方块了。
