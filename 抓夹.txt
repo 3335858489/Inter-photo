@@ -1,11 +1,142 @@
-我明白你的困惑，XML 文件的嵌套很容易让人眼花。为了绝对不出错，你**直接用下面的代码替换你文件里原有的对应部分**即可。
+<?xml version="1.0" ?>
+<robot name="dummy-ros2" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-请打开你的 `dummy-ros2_description/urdf/dummy-ros2.xacro` 文件：
+<xacro:include filename="$(find dummy-ros2_description)/urdf/materials.xacro" />
+<xacro:include filename="$(find dummy-ros2_description)/urdf/dummy-ros2.trans" />
+<xacro:include filename="$(find dummy-ros2_description)/urdf/dummy-ros2.gazebo" />
+<link name="world" />
+<joint name="world_joint" type="fixed">
+  <parent link="world" />
+  <child link = "base_link" />
+  <origin xyz="0.0 0.0 0.0" rpy="3.1415926536 3.1415926536 0.0" />
+</joint>
 
-### 1. 替换第六关节 (`link6_1_1`)
-找到文件里的 `<link name="link6_1_1">` 到 `</link>` 这整段代码（大约在第122行附近），把它**完全替换**为：
+<link name="base_link">
+  <inertial>
+    <origin xyz="-0.019286443307707055 0.0005817485706867557 0.05546290448958129" rpy="0 0 0"/>
+    <mass value="3.4054232030550327"/>
+    <inertia ixx="0.006318" iyy="0.00644" izz="0.006723" ixy="-1.1e-05" iyz="-0.000164" ixz="-2e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
 
-```xml
+<link name="link1_1_1">
+  <inertial>
+    <origin xyz="-0.005744742318232344 0.005464327027038366 0.012045619429015192" rpy="0 0 0"/>
+    <mass value="0.4000119946706078"/>
+    <inertia ixx="0.000172" iyy="0.000152" izz="0.00025" ixy="5.8e-05" iyz="-3.9e-05" ixz="2.7e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.019225 0.000523 -0.100684" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link1_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.019225 0.000523 -0.100684" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link1_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link2_1_1">
+  <inertial>
+    <origin xyz="0.022476329402049397 0.0015836740439541114 0.0701478637986927" rpy="0 0 0"/>
+    <mass value="0.9644194016592866"/>
+    <inertia ixx="0.003808" iyy="0.003848" izz="0.000499" ixy="-1e-05" iyz="1.3e-05" ixz="0.000274"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.034725 -0.034477 -0.129184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link2_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.034725 -0.034477 -0.129184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link2_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link3_1_1">
+  <inertial>
+    <origin xyz="-0.010730263185093621 -0.022369081214190782 0.036467614070683996" rpy="0 0 0"/>
+    <mass value="0.3817226974329336"/>
+    <inertia ixx="0.000328" iyy="0.00037" izz="0.000146" ixy="-2.4e-05" iyz="6.8e-05" ixz="6.5e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.001925 -0.034477 -0.275184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link3_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.001925 -0.034477 -0.275184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link3_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link4_1_1">
+  <inertial>
+    <origin xyz="-0.004221306676286125 0.09021372117053507 0.00026828289249919424" rpy="0 0 0"/>
+    <mass value="0.44370009904209484"/>
+    <inertia ixx="0.001103" iyy="0.00012" izz="0.001078" ixy="-3.2e-05" iyz="-1e-06" ixz="1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.016625 -0.024477 -0.327184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link4_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.016625 -0.024477 -0.327184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link4_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link5_1_1">
+  <inertial>
+    <origin xyz="-0.0007044959912857188 0.04181588666040692 1.9856549020258463e-05" rpy="0 0 0"/>
+    <mass value="0.1329416987985629"/>
+    <inertia ixx="0.000148" iyy="3.5e-05" izz="0.00016" ixy="3e-05" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.000175 -0.151477 -0.327184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link5_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.000175 -0.151477 -0.327184" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find dummy-ros2_description)/meshes/link5_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
 <link name="link6_1_1">
   <inertial>
     <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -26,14 +157,214 @@
     </geometry>
   </collision>
 </link>
-```
 
----
+<joint name="Joint1" type="revolute">
+  <origin xyz="-0.019225 -0.000523 0.100684" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="link1_1_1"/>
+  <axis xyz="0.0 -0.0 -1.0"/>
+  <limit
+    lower="-3.14"
+    upper="3.14"
+    effort="150"
+    velocity="3.15" />
+</joint>
 
-### 2. 替换抓夹的三个部件 (`gripper_base_link`, `left_finger`, `right_finger`)
-滑到文件最底部，找到你之前加的这三个 `link`，把它们**完全替换**为带有 `inertial` 的版本：
+<joint name="Joint2" type="revolute">
+  <origin xyz="-0.0155 0.035 0.0285" rpy="0 0 0"/>
+  <parent link="link1_1_1"/>
+  <child link="link2_1_1"/>
+  <axis xyz="-1.0 -0.0 0.0"/>
+  <limit
+    lower="-3.14"
+    upper="3.14"
+    effort="150"
+    velocity="3.15" />
+</joint>
 
-```xml
+<joint name="Joint3" type="revolute">
+  <origin xyz="0.03665 0.0 0.146" rpy="0 0 0"/>
+  <parent link="link2_1_1"/>
+  <child link="link3_1_1"/>
+  <axis xyz="-1.0 0.0 -0.0"/>
+  <limit
+    lower="-3.14"
+    upper="3.14"
+    effort="150"
+    velocity="3.15" />
+</joint>
+
+<joint name="Joint4" type="revolute">
+  <origin xyz="-0.01855 -0.01 0.052" rpy="0 0 0"/>
+  <parent link="link3_1_1"/>
+  <child link="link4_1_1"/>
+  <axis xyz="0.0 -1.0 0.0"/>
+  <limit
+    lower="-3.14"
+    upper="3.14"
+    effort="150"
+    velocity="3.15" />
+</joint>
+
+<joint name="Joint5" type="revolute">
+  <origin xyz="0.0168 0.127 0.0" rpy="0 0 0"/>
+  <parent link="link4_1_1"/>
+  <child link="link5_1_1"/>
+  <axis xyz="-1.0 0.0 -0.0"/>
+  <limit
+    lower="-3.14"
+    upper="3.14"
+    effort="150"
+    velocity="3.15" />
+</joint>
+
+<joint name="Joint6" type="revolute">
+  <origin xyz="-0.018506 0.077 -0.000106" rpy="0 0 0"/>
+  <parent link="link5_1_1"/>
+  <child link="link6_1_1"/>
+  <axis xyz="-0.0 -1.0 0.0"/>
+  <limit
+    lower="-3.14"
+    upper="3.14"
+    effort="150"
+    velocity="3.15" />
+</joint>
+
+<!-- ==================== 在这里添加 ROS2 Control ==================== -->
+<ros2_control name="GazeboSystem" type="system">
+  <hardware>
+    <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+  </hardware>
+  
+  <joint name="Joint1">
+    <command_interface name="position">
+      <param name="min">-3.14</param>
+      <param name="max">3.14</param>
+    </command_interface>
+    <state_interface name="position"/>
+    <state_interface name="velocity"/>
+  </joint>
+
+  <joint name="Joint2">
+    <command_interface name="position">
+      <param name="min">-3.14</param>
+      <param name="max">3.14</param>
+    </command_interface>
+    <state_interface name="position"/>
+    <state_interface name="velocity"/>
+  </joint>
+
+  <joint name="Joint3">
+    <command_interface name="position">
+      <param name="min">-3.14</param>
+      <param name="max">3.14</param>
+    </command_interface>
+    <state_interface name="position"/>
+    <state_interface name="velocity"/>
+  </joint>
+
+  <joint name="Joint4">
+    <command_interface name="position">
+      <param name="min">-3.14</param>
+      <param name="max">3.14</param>
+    </command_interface>
+    <state_interface name="position"/>
+    <state_interface name="velocity"/>
+  </joint>
+
+  <joint name="Joint5">
+    <command_interface name="position">
+      <param name="min">-3.14</param>
+      <param name="max">3.14</param>
+    </command_interface>
+    <state_interface name="position"/>
+    <state_interface name="velocity"/>
+  </joint>
+
+  <joint name="Joint6">
+    <command_interface name="position">
+      <param name="min">-3.14</param>
+      <param name="max">3.14</param>
+    </command_interface>
+    <state_interface name="position"/>
+    <state_interface name="velocity"/>
+  </joint>
+<joint name="finger_joint1">
+    <command_interface name="position">
+      <param name="min">0.0</param>
+      <param name="max">0.03</param>
+    </command_interface>
+    <state_interface name="position"/>
+    <state_interface name="velocity"/>
+  </joint>
+</ros2_control>
+<link name="camera_link">
+  <visual>
+    <geometry>
+      <box size="0.05 0.05 0.05"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+</link>
+
+<joint name="camera_joint" type="fixed">
+  <parent link="world"/>
+  <child link="camera_link"/>
+  <origin xyz="0.5 0.0 0.4" rpy="0 0.785 3.1415"/>
+</joint>
+
+<link name="camera_depth_frame"/>
+<joint name="camera_depth_joint" type="fixed">
+  <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
+  <parent link="camera_link"/>
+  <child link="camera_depth_frame"/>
+</joint>
+
+
+<gazebo reference="camera_link">
+  <sensor type="depth" name="camera">
+    <always_on>true</always_on>
+    <update_rate>15.0</update_rate>
+    <camera>
+      <horizontal_fov>1.047</horizontal_fov>
+      <image>
+        <format>B8G8R8</format>
+        <width>640</width>
+        <height>480</height>
+      </image>
+      <clip>
+        <near>0.1</near>
+        <far>8.0</far>
+      </clip>
+    </camera>
+    <plugin name="camera_plugin" filename="libgazebo_ros_camera.so">
+      <ros>
+        <namespace>camera</namespace>
+      </ros>
+      <camera_name>rgbd_camera</camera_name>
+      <frame_name>camera_depth_frame</frame_name>
+      <min_depth>0.1</min_depth>
+      <max_depth>8.0</max_depth>
+    </plugin>
+  </sensor>
+</gazebo>
+
+<link name="gripper_base_link">
+  <visual>
+    <origin xyz="0 0 0.02" rpy="0 0 0"/>
+    <geometry>
+      <box size="0.04 0.04 0.04"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0.02" rpy="0 0 0"/>
+    <geometry>
+      <box size="0.04 0.04 0.04"/>
+    </geometry>
+  </collision>
+</link>
+
 <link name="gripper_base_link">
   <inertial>
     <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -96,25 +427,22 @@
     </geometry>
   </collision>
 </link>
-```
 
-*(注意：保留它们下面的 `joint` 代码不变。)*
+<joint name="finger_joint1" type="prismatic">
+  <parent link="gripper_base_link"/>
+  <child link="left_finger"/>
+  <origin xyz="0 0.02 0.04" rpy="0 0 0"/>
+  <axis xyz="0 1 0"/>
+  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
+</joint>
 
-### 3. 保存、编译并测试
+<joint name="finger_joint2" type="prismatic">
+  <parent link="gripper_base_link"/>
+  <child link="right_finger"/>
+  <origin xyz="0 -0.02 0.04" rpy="0 0 0"/>
+  <axis xyz="0 -1 0"/>
+  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
+  <mimic joint="finger_joint1" multiplier="1.0" offset="0.0"/>
+</joint>
 
-修改完成后，一定记得先编译再运行！
-
-```bash
-cd ~/dummy_ws
-colcon build --symlink-install
-source install/setup.bash
-ros2 launch dummy_moveit_config demo.launch.py
-```
-
-等界面出来后，新开一个终端看看你的战果：
-```bash
-source /opt/ros/humble/setup.bash
-ros2 topic list
-```
-
-如果这次看到了相机话题，并且你在 RViz 里拖拽小球进行规划不再报错，那就大功告成了！快试试看。
+</robot>
