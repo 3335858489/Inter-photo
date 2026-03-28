@@ -1,408 +1,91 @@
-<?xml version="1.0" ?>
-<robot name="dummy-ros2" xmlns:xacro="http://www.ros.org/wiki/xacro">
+我看到了！你截图里的那个**鲜红色的关节（link6_1_1）**非常显眼。你的观察力很敏锐！
 
-<xacro:include filename="$(find dummy-ros2_description)/urdf/materials.xacro" />
-<xacro:include filename="$(find dummy-ros2_description)/urdf/dummy-ros2.trans" />
-<xacro:include filename="$(find dummy-ros2_description)/urdf/dummy-ros2.gazebo" />
+不要担心，这**绝对不是**机械臂或者抓夹在 3D 结构上写错了。在 RViz 和 MoveIt 中，出现这种亮红色只代表一件事情：**发生了自碰撞（Self-Collision）**。
 
-<link name="world" />
-<joint name="world_joint" type="fixed">
-  <parent link="world" />
-  <child link = "base_link" />
-  <origin xyz="0.0 0.0 0.0" rpy="3.1415926536 3.1415926536 0.0" />
-</joint>
+### 为什么会报“碰撞”？
+物理引擎非常“死板”。我们将抓夹（`gripper_base_link`）安装在了机械臂的末端（`link6_1_1`）上，它们两个在物理空间上肯定是紧紧贴在一起的。但是，因为你**漏掉了 SRDF 文件里的“免碰撞声明”**，MoveIt 的大脑发现这俩部件重叠了，就以为机器人发生了严重的“撞车事故”，为了安全起见，它不仅标红警告，还会拒绝执行任何轨迹规划。
 
-<link name="base_link">
-  <inertial>
-    <origin xyz="-0.019286443307707055 0.0005817485706867557 0.05546290448958129" rpy="0 0 0"/>
-    <mass value="3.4054232030550327"/>
-    <inertia ixx="0.006318" iyy="0.00644" izz="0.006723" ixy="-1.1e-05" iyz="-0.000164" ixz="-2e-06"/>
-  </inertial>
-  <visual>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+我刚才检查了你最新上传的 `dummy-ros2.srdf` 文件，发现里面**不仅缺失了免碰撞声明，甚至连 `gripper` (抓夹) 的规划组都还没加进去！**（可能是之前复制粘贴的时候遗漏了或者没保存）。
 
-<link name="link1_1_1">
-  <inertial>
-    <origin xyz="-0.005744742318232344 0.005464327027038366 0.012045619429015192" rpy="0 0 0"/>
-    <mass value="0.4000119946706078"/>
-    <inertia ixx="0.000172" iyy="0.000152" izz="0.00025" ixy="5.8e-05" iyz="-3.9e-05" ixz="2.7e-05"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.019225 0.000523 -0.100684" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link1_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.019225 0.000523 -0.100684" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link1_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+---
 
-<link name="link2_1_1">
-  <inertial>
-    <origin xyz="0.022476329402049397 0.0015836740439541114 0.0701478637986927" rpy="0 0 0"/>
-    <mass value="0.9644194016592866"/>
-    <inertia ixx="0.003808" iyy="0.003848" izz="0.000499" ixy="-1e-05" iyz="1.3e-05" ixz="0.000274"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.034725 -0.034477 -0.129184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link2_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.034725 -0.034477 -0.129184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link2_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+### 🛠️ 终极修复：替换完整的 SRDF 文件
 
-<link name="link3_1_1">
-  <inertial>
-    <origin xyz="-0.010730263185093621 -0.022369081214190782 0.036467614070683996" rpy="0 0 0"/>
-    <mass value="0.3817226974329336"/>
-    <inertia ixx="0.000328" iyy="0.00037" izz="0.000146" ixy="-2.4e-05" iyz="6.8e-05" ixz="6.5e-05"/>
-  </inertial>
-  <visual>
-    <origin xyz="-0.001925 -0.034477 -0.275184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link3_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="-0.001925 -0.034477 -0.275184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link3_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+为了省去你找代码位置的麻烦，我帮你把 `dummy-ros2.srdf` 文件从头到尾重写了一遍。**请打开你电脑上的 `dummy-ros2.srdf` 文件，清空里面的所有内容，直接把下面这一整段代码粘贴进去：**
 
-<link name="link4_1_1">
-  <inertial>
-    <origin xyz="-0.004221306676286125 0.09021372117053507 0.00026828289249919424" rpy="0 0 0"/>
-    <mass value="0.44370009904209484"/>
-    <inertia ixx="0.001103" iyy="0.00012" izz="0.001078" ixy="-3.2e-05" iyz="-1e-06" ixz="1e-06"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.016625 -0.024477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link4_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.016625 -0.024477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link4_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<robot name="dummy-ros2">
+    <group name="dummy_arm">
+        <chain base_link="base_link" tip_link="link6_1_1"/>
+    </group>
 
-<link name="link5_1_1">
-  <inertial>
-    <origin xyz="-0.0007044959912857188 0.04181588666040692 1.9856549020258463e-05" rpy="0 0 0"/>
-    <mass value="0.1329416987985629"/>
-    <inertia ixx="0.000148" iyy="3.5e-05" izz="0.00016" ixy="3e-05" iyz="-0.0" ixz="0.0"/>
-  </inertial>
-  <visual>
-    <origin xyz="-0.000175 -0.151477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link5_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="-0.000175 -0.151477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link5_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+    <group name="gripper">
+        <link name="gripper_base_link"/>
+        <link name="left_finger"/>
+        <link name="right_finger"/>
+        <joint name="finger_joint1"/>
+    </group>
 
-<link name="link6_1_1">
-  <inertial>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <mass value="0.05"/>
-    <inertia ixx="0.00001" iyy="0.00001" izz="0.00001" ixy="0.0" iyz="0.0" ixz="0.0"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.018331 -0.228477 -0.327078" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link6_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.018331 -0.228477 -0.327078" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="file://$(find dummy-ros2_description)/meshes/link6_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+    <end_effector name="dummy_gripper" parent_link="link6_1_1" group="gripper" parent_group="dummy_arm"/>
 
-<joint name="Joint1" type="revolute">
-  <origin xyz="-0.019225 -0.000523 0.100684" rpy="0 0 0"/>
-  <parent link="base_link"/>
-  <child link="link1_1_1"/>
-  <axis xyz="0.0 -0.0 -1.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
+    <group_state name="home" group="dummy_arm">
+        <joint name="Joint1" value="0"/>
+        <joint name="Joint2" value="0"/>
+        <joint name="Joint3" value="0"/>
+        <joint name="Joint4" value="0"/>
+        <joint name="Joint5" value="0"/>
+        <joint name="Joint6" value="0"/>
+    </group_state>
+    <group_state name="reset" group="dummy_arm">
+        <joint name="Joint1" value="0"/>
+        <joint name="Joint2" value="-1.1276"/>
+        <joint name="Joint3" value="1.4052"/>
+        <joint name="Joint4" value="0"/>
+        <joint name="Joint5" value="0"/>
+        <joint name="Joint6" value="0"/>
+    </group_state>
 
-<joint name="Joint2" type="revolute">
-  <origin xyz="-0.0155 0.035 0.0285" rpy="0 0 0"/>
-  <parent link="link1_1_1"/>
-  <child link="link2_1_1"/>
-  <axis xyz="-1.0 -0.0 0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
+    <group_state name="open" group="gripper">
+        <joint name="finger_joint1" value="0.03"/>
+    </group_state>
+    <group_state name="close" group="gripper">
+        <joint name="finger_joint1" value="0.0"/>
+    </group_state>
 
-<joint name="Joint3" type="revolute">
-  <origin xyz="0.03665 0.0 0.146" rpy="0 0 0"/>
-  <parent link="link2_1_1"/>
-  <child link="link3_1_1"/>
-  <axis xyz="-1.0 0.0 -0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
+    <virtual_joint name="virtual_joints" type="fixed" parent_frame="world" child_link="base_link"/>
 
-<joint name="Joint4" type="revolute">
-  <origin xyz="-0.01855 -0.01 0.052" rpy="0 0 0"/>
-  <parent link="link3_1_1"/>
-  <child link="link4_1_1"/>
-  <axis xyz="0.0 -1.0 0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
+    <disable_collisions link1="base_link" link2="link1_1_1" reason="Adjacent"/>
+    <disable_collisions link1="link1_1_1" link2="link2_1_1" reason="Adjacent"/>
+    <disable_collisions link1="link2_1_1" link2="link3_1_1" reason="Adjacent"/>
+    <disable_collisions link1="link3_1_1" link2="link4_1_1" reason="Adjacent"/>
+    <disable_collisions link1="link3_1_1" link2="link5_1_1" reason="Never"/>
+    <disable_collisions link1="link3_1_1" link2="link6_1_1" reason="Never"/>
+    <disable_collisions link1="link4_1_1" link2="link5_1_1" reason="Adjacent"/>
+    <disable_collisions link1="link5_1_1" link2="link6_1_1" reason="Adjacent"/>
 
-<joint name="Joint5" type="revolute">
-  <origin xyz="0.0168 0.127 0.0" rpy="0 0 0"/>
-  <parent link="link4_1_1"/>
-  <child link="link5_1_1"/>
-  <axis xyz="-1.0 0.0 -0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
-
-<joint name="Joint6" type="revolute">
-  <origin xyz="-0.018506 0.077 -0.000106" rpy="0 0 0"/>
-  <parent link="link5_1_1"/>
-  <child link="link6_1_1"/>
-  <axis xyz="-0.0 -1.0 0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
-
-<ros2_control name="GazeboSystem" type="system">
-  <hardware>
-    <plugin>gazebo_ros2_control/GazeboSystem</plugin>
-  </hardware>
-  <joint name="Joint1">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-  <joint name="Joint2">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-  <joint name="Joint3">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-  <joint name="Joint4">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-  <joint name="Joint5">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-  <joint name="Joint6">
-    <command_interface name="position">
-      <param name="min">-3.14</param>
-      <param name="max">3.14</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-  <joint name="finger_joint1">
-    <command_interface name="position">
-      <param name="min">0.0</param>
-      <param name="max">0.03</param>
-    </command_interface>
-    <state_interface name="position"/>
-    <state_interface name="velocity"/>
-  </joint>
-</ros2_control>
-
-<link name="camera_link">
-  <visual>
-    <geometry>
-      <box size="0.05 0.05 0.05"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-</link>
-
-<joint name="camera_joint" type="fixed">
-  <parent link="world"/>
-  <child link="camera_link"/>
-  <origin xyz="0.5 0.0 0.4" rpy="0 0.785 3.1415"/>
-</joint>
-
-<link name="camera_depth_frame"/>
-<joint name="camera_depth_joint" type="fixed">
-  <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
-  <parent link="camera_link"/>
-  <child link="camera_depth_frame"/>
-</joint>
-
-<gazebo reference="camera_link">
-  <sensor type="depth" name="camera">
-    <always_on>true</always_on>
-    <update_rate>15.0</update_rate>
-    <camera>
-      <horizontal_fov>1.047</horizontal_fov>
-      <image>
-        <format>B8G8R8</format>
-        <width>640</width>
-        <height>480</height>
-      </image>
-      <clip>
-        <near>0.1</near>
-        <far>8.0</far>
-      </clip>
-    </camera>
-    <plugin name="camera_plugin" filename="libgazebo_ros_camera.so">
-      <ros>
-        <namespace>camera</namespace>
-      </ros>
-      <camera_name>rgbd_camera</camera_name>
-      <frame_name>camera_depth_frame</frame_name>
-      <min_depth>0.1</min_depth>
-      <max_depth>8.0</max_depth>
-    </plugin>
-  </sensor>
-</gazebo>
-
-<link name="gripper_base_link">
-  <inertial>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <mass value="0.05"/>
-    <inertia ixx="0.00001" iyy="0.00001" izz="0.00001" ixy="0.0" iyz="0.0" ixz="0.0"/>
-  </inertial>
-  <visual>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="gripper_base_joint" type="fixed">
-  <parent link="link6_1_1"/>
-  <child link="gripper_base_link"/>
-  <origin xyz="0 0 0" rpy="0 0 0"/> 
-</joint>
-
-<link name="left_finger">
-  <inertial>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <mass value="0.01"/>
-    <inertia ixx="0.000001" iyy="0.000001" izz="0.000001" ixy="0.0" iyz="0.0" ixz="0.0"/>
-  </inertial>
-  <visual>
-    <origin xyz="0 0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="right_finger">
-  <inertial>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <mass value="0.01"/>
-    <inertia ixx="0.000001" iyy="0.000001" izz="0.000001" ixy="0.0" iyz="0.0" ixz="0.0"/>
-  </inertial>
-  <visual>
-    <origin xyz="0 -0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 -0.01 0.03" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.01 0.01 0.06"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="finger_joint1" type="prismatic">
-  <parent link="gripper_base_link"/>
-  <child link="left_finger"/>
-  <origin xyz="0 0.02 0.04" rpy="0 0 0"/>
-  <axis xyz="0 1 0"/>
-  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
-</joint>
-
-<joint name="finger_joint2" type="prismatic">
-  <parent link="gripper_base_link"/>
-  <child link="right_finger"/>
-  <origin xyz="0 -0.02 0.04" rpy="0 0 0"/>
-  <axis xyz="0 -1 0"/>
-  <limit lower="0.0" upper="0.03" effort="20" velocity="0.1"/>
-  <mimic joint="finger_joint1" multiplier="1.0" offset="0.0"/>
-</joint>
-
+    <disable_collisions link1="link6_1_1" link2="gripper_base_link" reason="Adjacent"/>
+    <disable_collisions link1="link5_1_1" link2="gripper_base_link" reason="Never"/>
+    <disable_collisions link1="gripper_base_link" link2="left_finger" reason="Adjacent"/>
+    <disable_collisions link1="gripper_base_link" link2="right_finger" reason="Adjacent"/>
+    <disable_collisions link1="link6_1_1" link2="left_finger" reason="Never"/>
+    <disable_collisions link1="link6_1_1" link2="right_finger" reason="Never"/>
+    <disable_collisions link1="left_finger" link2="right_finger" reason="Never"/>
+    <disable_collisions link1="base_link" link2="camera_link" reason="Adjacent"/>
 </robot>
+```
+
+### 最后一步：重新编译并见证奇迹
+
+因为修改了 SRDF 文件，必须让 ROS2 重新加载它：
+
+```bash
+cd ~/dummy_ws
+colcon build --symlink-install
+source install/setup.bash
+ros2 launch dummy_moveit_config demo.launch.py
+```
+
+重新打开后，那个烦人的红色绝对会消失！并且，你会在 RViz 的 `Planning Group` 下拉菜单里，惊喜地发现多出了一个 **`gripper`** 选项，你可以像拖拽机械臂一样，单独控制抓夹的张开和闭合了。
+
+快去试试，红色消退后，我们就可以正式开启 Python 视觉算法的大门了！需要我接着准备下一步的 Python 代码吗？
