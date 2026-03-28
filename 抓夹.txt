@@ -1,91 +1,82 @@
-我看到了！你截图里的那个**鲜红色的关节（link6_1_1）**非常显眼。你的观察力很敏锐！
+import os
+import xacro
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch. actions import IncludeLaunchDescription, TimerAction
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch. substitutions import PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros. substitutions import FindPackageShare
 
-不要担心，这**绝对不是**机械臂或者抓夹在 3D 结构上写错了。在 RViz 和 MoveIt 中，出现这种亮红色只代表一件事情：**发生了自碰撞（Self-Collision）**。
 
-### 为什么会报“碰撞”？
-物理引擎非常“死板”。我们将抓夹（`gripper_base_link`）安装在了机械臂的末端（`link6_1_1`）上，它们两个在物理空间上肯定是紧紧贴在一起的。但是，因为你**漏掉了 SRDF 文件里的“免碰撞声明”**，MoveIt 的大脑发现这俩部件重叠了，就以为机器人发生了严重的“撞车事故”，为了安全起见，它不仅标红警告，还会拒绝执行任何轨迹规划。
+def generate_launch_description():
+    share_dir = get_package_share_directory('dummy-ros2_description')
 
-我刚才检查了你最新上传的 `dummy-ros2.srdf` 文件，发现里面**不仅缺失了免碰撞声明，甚至连 `gripper` (抓夹) 的规划组都还没加进去！**（可能是之前复制粘贴的时候遗漏了或者没保存）。
+    xacro_file = os.path. join(share_dir, 'urdf', 'dummy-ros2.xacro')
+    robot_description_config = xacro.process_file(xacro_file)
+    robot_urdf = robot_description_config.toxml()
 
----
+    robot_state_publisher_node = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        parameters=[
+            {'robot_description': robot_urdf,
+             'use_sim_time': True}
+        ]
+    )
 
-### 🛠️ 终极修复：替换完整的 SRDF 文件
+    gazebo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([
+                FindPackageShare('gazebo_ros'),
+                'launch',
+                'gazebo.launch.py'
+            ])
+        ]),
+    )
 
-为了省去你找代码位置的麻烦，我帮你把 `dummy-ros2.srdf` 文件从头到尾重写了一遍。**请打开你电脑上的 `dummy-ros2.srdf` 文件，清空里面的所有内容，直接把下面这一整段代码粘贴进去：**
+    spawn_entity = Node(
+        package='gazebo_ros',
+        executable='spawn_entity.py',
+        arguments=['-entity', 'dummy-ros2', '-topic', 'robot_description'],
+        output='screen'
+    )
+    
+    # 延迟 5 秒后再 spawn
+    delayed_spawn = TimerAction(
+        period=5.0,
+        actions=[spawn_entity]
+    )
+# 启动状态广播器
+    load_joint_state_broadcaster = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_state_broadcaster"],
+        output="screen",
+    )
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<robot name="dummy-ros2">
-    <group name="dummy_arm">
-        <chain base_link="base_link" tip_link="link6_1_1"/>
-    </group>
+    # 启动机械臂轨迹控制器 (需要在你的 config/ros2_controllers.yaml 中定义 dummy_arm_controller)
+    load_arm_controller = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["dummy_arm_controller"],
+        output="screen",
+    )
 
-    <group name="gripper">
-        <link name="gripper_base_link"/>
-        <link name="left_finger"/>
-        <link name="right_finger"/>
-        <joint name="finger_joint1"/>
-    </group>
+    # (未来添加夹爪后) 启动夹爪控制器
+    # load_gripper_controller = Node(...)
 
-    <end_effector name="dummy_gripper" parent_link="link6_1_1" group="gripper" parent_group="dummy_arm"/>
-
-    <group_state name="home" group="dummy_arm">
-        <joint name="Joint1" value="0"/>
-        <joint name="Joint2" value="0"/>
-        <joint name="Joint3" value="0"/>
-        <joint name="Joint4" value="0"/>
-        <joint name="Joint5" value="0"/>
-        <joint name="Joint6" value="0"/>
-    </group_state>
-    <group_state name="reset" group="dummy_arm">
-        <joint name="Joint1" value="0"/>
-        <joint name="Joint2" value="-1.1276"/>
-        <joint name="Joint3" value="1.4052"/>
-        <joint name="Joint4" value="0"/>
-        <joint name="Joint5" value="0"/>
-        <joint name="Joint6" value="0"/>
-    </group_state>
-
-    <group_state name="open" group="gripper">
-        <joint name="finger_joint1" value="0.03"/>
-    </group_state>
-    <group_state name="close" group="gripper">
-        <joint name="finger_joint1" value="0.0"/>
-    </group_state>
-
-    <virtual_joint name="virtual_joints" type="fixed" parent_frame="world" child_link="base_link"/>
-
-    <disable_collisions link1="base_link" link2="link1_1_1" reason="Adjacent"/>
-    <disable_collisions link1="link1_1_1" link2="link2_1_1" reason="Adjacent"/>
-    <disable_collisions link1="link2_1_1" link2="link3_1_1" reason="Adjacent"/>
-    <disable_collisions link1="link3_1_1" link2="link4_1_1" reason="Adjacent"/>
-    <disable_collisions link1="link3_1_1" link2="link5_1_1" reason="Never"/>
-    <disable_collisions link1="link3_1_1" link2="link6_1_1" reason="Never"/>
-    <disable_collisions link1="link4_1_1" link2="link5_1_1" reason="Adjacent"/>
-    <disable_collisions link1="link5_1_1" link2="link6_1_1" reason="Adjacent"/>
-
-    <disable_collisions link1="link6_1_1" link2="gripper_base_link" reason="Adjacent"/>
-    <disable_collisions link1="link5_1_1" link2="gripper_base_link" reason="Never"/>
-    <disable_collisions link1="gripper_base_link" link2="left_finger" reason="Adjacent"/>
-    <disable_collisions link1="gripper_base_link" link2="right_finger" reason="Adjacent"/>
-    <disable_collisions link1="link6_1_1" link2="left_finger" reason="Never"/>
-    <disable_collisions link1="link6_1_1" link2="right_finger" reason="Never"/>
-    <disable_collisions link1="left_finger" link2="right_finger" reason="Never"/>
-    <disable_collisions link1="base_link" link2="camera_link" reason="Adjacent"/>
-</robot>
-```
-
-### 最后一步：重新编译并见证奇迹
-
-因为修改了 SRDF 文件，必须让 ROS2 重新加载它：
-
-```bash
-cd ~/dummy_ws
-colcon build --symlink-install
-source install/setup.bash
-ros2 launch dummy_moveit_config demo.launch.py
-```
-
-重新打开后，那个烦人的红色绝对会消失！并且，你会在 RViz 的 `Planning Group` 下拉菜单里，惊喜地发现多出了一个 **`gripper`** 选项，你可以像拖拽机械臂一样，单独控制抓夹的张开和闭合了。
-
-快去试试，红色消退后，我们就可以正式开启 Python 视觉算法的大门了！需要我接着准备下一步的 Python 代码吗？
+    # 修改 return 逻辑，依次延迟启动
+    return LaunchDescription([
+        robot_state_publisher_node,
+        gazebo,
+        delayed_spawn,
+        TimerAction(period=7.0, actions=[load_joint_state_broadcaster]),
+        TimerAction(period=8.0, actions=[load_arm_controller]),
+    ])
+    return LaunchDescription([
+        robot_state_publisher_node,
+        gazebo,
+        delayed_spawn,  # 使用延迟版本
+    ])
