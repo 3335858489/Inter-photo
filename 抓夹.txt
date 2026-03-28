@@ -4,6 +4,7 @@
 <xacro:include filename="$(find dummy-ros2_description)/urdf/materials.xacro" />
 <xacro:include filename="$(find dummy-ros2_description)/urdf/dummy-ros2.trans" />
 <xacro:include filename="$(find dummy-ros2_description)/urdf/dummy-ros2.gazebo" />
+
 <link name="world" />
 <joint name="world_joint" type="fixed">
   <parent link="world" />
@@ -163,11 +164,7 @@
   <parent link="base_link"/>
   <child link="link1_1_1"/>
   <axis xyz="0.0 -0.0 -1.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
+  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
 </joint>
 
 <joint name="Joint2" type="revolute">
@@ -175,11 +172,7 @@
   <parent link="link1_1_1"/>
   <child link="link2_1_1"/>
   <axis xyz="-1.0 -0.0 0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
+  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
 </joint>
 
 <joint name="Joint3" type="revolute">
@@ -187,11 +180,7 @@
   <parent link="link2_1_1"/>
   <child link="link3_1_1"/>
   <axis xyz="-1.0 0.0 -0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
+  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
 </joint>
 
 <joint name="Joint4" type="revolute">
@@ -199,11 +188,7 @@
   <parent link="link3_1_1"/>
   <child link="link4_1_1"/>
   <axis xyz="0.0 -1.0 0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
+  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
 </joint>
 
 <joint name="Joint5" type="revolute">
@@ -211,11 +196,7 @@
   <parent link="link4_1_1"/>
   <child link="link5_1_1"/>
   <axis xyz="-1.0 0.0 -0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
+  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
 </joint>
 
 <joint name="Joint6" type="revolute">
@@ -223,19 +204,13 @@
   <parent link="link5_1_1"/>
   <child link="link6_1_1"/>
   <axis xyz="-0.0 -1.0 0.0"/>
-  <limit
-    lower="-3.14"
-    upper="3.14"
-    effort="150"
-    velocity="3.15" />
+  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
 </joint>
 
-<!-- ==================== 在这里添加 ROS2 Control ==================== -->
 <ros2_control name="GazeboSystem" type="system">
   <hardware>
     <plugin>gazebo_ros2_control/GazeboSystem</plugin>
   </hardware>
-  
   <joint name="Joint1">
     <command_interface name="position">
       <param name="min">-3.14</param>
@@ -244,7 +219,6 @@
     <state_interface name="position"/>
     <state_interface name="velocity"/>
   </joint>
-
   <joint name="Joint2">
     <command_interface name="position">
       <param name="min">-3.14</param>
@@ -253,7 +227,6 @@
     <state_interface name="position"/>
     <state_interface name="velocity"/>
   </joint>
-
   <joint name="Joint3">
     <command_interface name="position">
       <param name="min">-3.14</param>
@@ -262,7 +235,6 @@
     <state_interface name="position"/>
     <state_interface name="velocity"/>
   </joint>
-
   <joint name="Joint4">
     <command_interface name="position">
       <param name="min">-3.14</param>
@@ -271,7 +243,6 @@
     <state_interface name="position"/>
     <state_interface name="velocity"/>
   </joint>
-
   <joint name="Joint5">
     <command_interface name="position">
       <param name="min">-3.14</param>
@@ -280,7 +251,6 @@
     <state_interface name="position"/>
     <state_interface name="velocity"/>
   </joint>
-
   <joint name="Joint6">
     <command_interface name="position">
       <param name="min">-3.14</param>
@@ -289,7 +259,7 @@
     <state_interface name="position"/>
     <state_interface name="velocity"/>
   </joint>
-<joint name="finger_joint1">
+  <joint name="finger_joint1">
     <command_interface name="position">
       <param name="min">0.0</param>
       <param name="max">0.03</param>
@@ -298,6 +268,7 @@
     <state_interface name="velocity"/>
   </joint>
 </ros2_control>
+
 <link name="camera_link">
   <visual>
     <geometry>
@@ -319,7 +290,6 @@
   <parent link="camera_link"/>
   <child link="camera_depth_frame"/>
 </joint>
-
 
 <gazebo reference="camera_link">
   <sensor type="depth" name="camera">
@@ -350,22 +320,6 @@
 </gazebo>
 
 <link name="gripper_base_link">
-  <visual>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
-    <geometry>
-      <box size="0.04 0.04 0.04"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="gripper_base_link">
   <inertial>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <mass value="0.05"/>
@@ -385,6 +339,12 @@
     </geometry>
   </collision>
 </link>
+
+<joint name="gripper_base_joint" type="fixed">
+  <parent link="link6_1_1"/>
+  <child link="gripper_base_link"/>
+  <origin xyz="0 0 0" rpy="0 0 0"/> 
+</joint>
 
 <link name="left_finger">
   <inertial>
