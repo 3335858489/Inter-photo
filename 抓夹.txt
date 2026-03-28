@@ -1,36 +1,45 @@
-如果话题（Topic）连选都选不出来，这就意味着**相机根本没有在工作**。
+啊，怪我没说清楚具体的位置！这个 `<plugin>` 标签其实嵌套在文件底部一大段代码的里面。为了绝对不出错，我们干脆**把关于相机的整段代码全都替换掉**。
 
-在 ROS2 + Gazebo 的仿真中，出现这种情况通常只有两个原因：**要么是你少装了插件库，要么是插件报错崩溃了。**
+请打开你的 `dummy-ros2.xacro` 文件，滑到接近最底部的地方（在抓夹代码 `gripper_base_link` 的上面）。
 
-这也是非常经典的排错环节，我们用标准的 ROS2 开发者思路来一步步排查。请按顺序执行以下三步：
+找到以 `<gazebo reference="camera_link">` 开头，以 `</gazebo>` 结尾的这一大段：
 
-### 第一步：检查是否缺失 Gazebo 官方视觉插件库（最常见的原因！）
-因为你是自己搭建的虚拟机环境，很有可能只安装了基础的 ROS2，而没有安装 Gazebo 和 ROS2 通信的桥梁插件（`gazebo_ros_camera` 就包含在这个库里）。
-如果没装这个库，Gazebo 遇到代码里的 `<plugin filename="libgazebo_ros_camera.so">` 时会直接忽略，所以什么话题都不会发出来。
-
-请在终端输入以下命令安装（如果你用的是 Humble 版本）：
-```bash
-sudo apt update
-sudo apt install ros-humble-gazebo-ros-pkgs
+**你要找的旧代码大概长这样：**
+```xml
+<gazebo reference="camera_link">
+  <sensor type="depth" name="camera">
+    ... (中间省略很多行) ...
+    <plugin name="camera_plugin" filename="libgazebo_ros_camera.so">
+      <ros>
+        <namespace>/</namespace>
+        <remapping>custom_camera/image_raw:=/camera/color/image_raw</remapping>
+        ...
+      </ros>
+      ...
+    </plugin>
+  </sensor>
+</gazebo>
 ```
-*（如果你用的是 Foxy 或 Iron，请把 `humble` 替换成对应的版本名）*
 
-### 第二步：用最原始的命令查看话题
-有时候 `rqt_image_view` 反应比较慢，或者下拉菜单没刷新。我们直接用终端“照妖镜”来看看系统里到底有没有图像话题。
-
-请保持你的 `demo.launch.py` 处于运行状态，然后打开一个**新终端**，输入：
-```bash
-ros2 topic list
-```
-仔细看看输出的列表里，**有没有任何带有 `image_raw`、`camera` 或者 `depth` 字样的话题？** * 如果**有**（比如名字叫 `/custom_camera/image_raw` 或者 `/camera/image_raw`），说明相机工作了，只是话题名字和你在 rqt 里找的不一样。
-* 如果**完全没有**，说明代码里的插件配置还需要微调。请进入第三步。
-
-### 第三步：简化 URDF 中的相机插件代码
-如果在 ROS2 Humble 中，重映射（Remapping）的语法写得太复杂，插件可能会加载失败而且不报错。我们把它改成**最保险、最简单**的写法。
-
-请打开你的 `dummy-ros2.xacro`，找到最下面 `<sensor type="depth" name="camera">` 里面的 `<plugin>` 标签，把整个 `<plugin> ... </plugin>` 替换成下面这样：
+**请把上面这一整段（从 `<gazebo...>` 到 `</gazebo>`），直接替换成下面这个最精简、最不容易报错的版本：**
 
 ```xml
+<gazebo reference="camera_link">
+  <sensor type="depth" name="camera">
+    <always_on>true</always_on>
+    <update_rate>15.0</update_rate>
+    <camera>
+      <horizontal_fov>1.047</horizontal_fov>
+      <image>
+        <format>B8G8R8</format>
+        <width>640</width>
+        <height>480</height>
+      </image>
+      <clip>
+        <near>0.1</near>
+        <far>8.0</far>
+      </clip>
+    </camera>
     <plugin name="camera_plugin" filename="libgazebo_ros_camera.so">
       <ros>
         <namespace>camera</namespace>
@@ -40,14 +49,30 @@ ros2 topic list
       <min_depth>0.1</min_depth>
       <max_depth>8.0</max_depth>
     </plugin>
+  </sensor>
+</gazebo>
 ```
 
-**替换完成后，老规矩（一定要做！）：**
-1. 关闭正在运行的 `demo.launch.py`终端 (Ctrl+C)。
-2. 回到工作空间根目录 `cd ~/dummy_ws`。
-3. 重新编译：`colcon build --symlink-install`
-4. 重新加载并运行：`source install/setup.bash`，然后 `ros2 launch dummy_moveit_config demo.launch.py`。
+### 替换完保存后，千万别忘了这关键的两步：
 
-再次运行 `ros2 topic list`，这次你应该能看到 `/camera/image_raw` 和 `/camera/depth/image_raw` 赫然在列！然后在 `rqt_image_view` 里选中它们。
+**1. 确保你安装了 Gazebo 的 ROS2 插件包**（如果你之前没执行过，一定要在终端跑一次，因为没这个包，哪怕代码写对了相机出不来）：
+```bash
+sudo apt update
+sudo apt install ros-humble-gazebo-ros-pkgs
+```
 
-告诉我哪一步让你看到了话题？我们马上进入写 Python 感知代码的环节！
+**2. 重新编译让新代码生效：**
+关闭之前运行的 Launch 终端，回到工作空间根目录：
+```bash
+cd ~/dummy_ws
+colcon build --symlink-install
+source install/setup.bash
+ros2 launch dummy_moveit_config demo.launch.py
+```
+
+然后再打开一个新终端运行：
+```bash
+ros2 topic list
+```
+
+看看这次列表里有没有出现 `/camera/rgbd_camera/image_raw` 或者带有 `camera` 字样的话题！如果出现了，就可以在 `rqt_image_view` 里选择了。加油，距离成功就差这临门一脚了！
