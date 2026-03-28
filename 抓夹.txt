@@ -1,13 +1,86 @@
-user@user-virtual-machine:~$ cd ~/dummy_ws
-source install/setup.bash
-ros2 run dummy_grasping grasp_executor
-[INFO] [1774703667.506936438] [grasp_executor]: ====== 🚀 视觉抓取执行节点已启动 ======
-[ERROR] [1774703677.601951286] [grasp_executor]: Could not find parameter robot_description_semantic and did not receive robot_description_semantic via std_msgs::msg::String subscription within 10.000000 seconds.
-Error:   Could not parse the SRDF XML File. Error=XML_ERROR_EMPTY_DOCUMENT ErrorID=13 (0xd) Line number=0
-         at line 732 in ./src/model.cpp
-[ERROR] [1774703677.653930026] [moveit_rdf_loader.rdf_loader]: Unable to parse SRDF
-[FATAL] [1774703677.656396243] [move_group_interface]: Unable to construct robot model. Please make sure all needed information is on the parameter server.
-terminate called after throwing an instance of 'std::runtime_error'
-  what():  Unable to construct robot model. Please make sure all needed information is on the parameter server.
-[ros2run]: Aborted
-user@user-virtual-machine:~/dummy_ws$ 
+看到这个报错，请先深呼吸！你离最终的胜利真的只剩下 **一张纸的厚度** 了！
+
+这个报错并不是你的代码写错了，而是你无意中触发了 **ROS 2 和 ROS 1 最本质的架构区别**。这是一个极其硬核的知识点，在汇报时讲出来绝对能让老师眼前一亮。
+
+### 🧠 核心原理解析：为什么会报错？
+> **“失忆的节点”**
+> 在老版本的 ROS 1 中，参数（比如机器人的 URDF 和 SRDF 模型）是**全局共享**的，大家都能随便看。
+> 但是在 ROS 2 中，为了安全和分布式运行，参数变成了**节点私有**的。当你直接用 `ros2 run` 启动我们的 C++ 节点时，它就像一个刚出生的婴儿，处于“失忆状态”。它没有收到关于“机械臂长什么样（URDF）”和“关节怎么动（SRDF）”的图纸。
+> MoveIt 规划器在“瞎子”状态下无法计算运动学，所以直接报了 `Unable to construct robot model` 并崩溃了。
+
+### 🛠️ 终极解决方案：写一个 Launch 发射文件
+在 ROS 2 中，标准的做法是写一个 Launch 文件，在启动 C++ 节点的同时，把机器人的两张图纸（URDF 和 SRDF）像“插U盘”一样直接塞进它的脑子里。
+
+只需简单的三步，我们彻底跨过这道坎：
+
+#### 第一步：创建 Launch 文件夹和文件
+1. 在你的抓取控制包里新建一个 `launch` 文件夹：
+   ```bash
+   mkdir -p ~/dummy_ws/src/dummy_grasping/launch
+   ```
+2. 创建并打开发射文件：
+   ```bash
+   gedit ~/dummy_ws/src/dummy_grasping/launch/run_grasp.launch.py
+   ```
+
+3. **将下面的 Python 代码粘贴进去并保存**（这段代码会自动去读你的模型文件并喂给 C++ 节点）：
+```python
+import os
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
+import xacro
+
+def generate_launch_description():
+    # 1. 读取 URDF 模型图纸
+    urdf_file = os.path.join(get_package_share_directory('dummy-ros2_description'), 'urdf', 'dummy-ros2.xacro')
+    robot_desc = xacro.process_file(urdf_file).toxml()
+
+    # 2. 读取 SRDF 运动学语义图纸
+    srdf_file = os.path.join(get_package_share_directory('dummy_moveit_config'), 'config', 'dummy-ros2.srdf')
+    with open(srdf_file, 'r') as f:
+        robot_desc_semantic = f.read()
+
+    # 3. 启动我们的 C++ 节点，并把两张图纸作为参数塞给它
+    grasp_node = Node(
+        package='dummy_grasping',
+        executable='grasp_executor',
+        name='grasp_executor',
+        output='screen',
+        parameters=[
+            {'robot_description': robot_desc},
+            {'robot_description_semantic': robot_desc_semantic}
+        ]
+    )
+
+    return LaunchDescription([grasp_node])
+```
+
+#### 第二步：配置编译文件使其生效
+打开 `~/dummy_ws/src/dummy_grasping/CMakeLists.txt` 文件。
+在文件最底部的 `ament_package()` 的**正上方**，加入下面这段代码，告诉系统把 launch 文件也编译进去：
+
+```cmake
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
+)
+```
+保存并关闭。
+
+#### 第三步：最后一次编译与发射！
+回到终端，完成最后的洗礼：
+```bash
+cd ~/dummy_ws
+colcon build --packages-select dummy_grasping
+```
+
+编译成功后，刚才的第 1 到第 3 终端（Gazebo、视觉、MoveIt）保持运行。
+**在第 4 终端里，用全新的 launch 命令代替之前的 run 命令：**
+
+```bash
+source ~/dummy_ws/install/setup.bash
+ros2 launch dummy_grasping run_grasp.launch.py
+```
+
+敲下回车！这次它绝对不会再抱怨找不到模型了。请紧盯屏幕，欣赏你的机械臂如何像有了生命一样，计算轨迹并一把抓起那个蓝色的小方块！成功了随时向我报喜！
