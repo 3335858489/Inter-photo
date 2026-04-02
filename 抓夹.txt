@@ -1,103 +1,84 @@
-完全理解！C++ 对代码插入的位置极其严格，稍微放错在一对大括号 `{}` 外面，或者放在了变量声明之前，都会直接导致编译报错。
+没问题！为了防止手动修改时缩进或标点符号出错，我直接给你 **`gazebo.launch.py` 的完整代码**。
 
-直接拿去用！我已经把这 6 行“开挂代码”完美地融合进了完整的执行逻辑中，并且确认了没有语法错误。
+请打开 `~/dummy_ws/src/dummy-ros2_description/launch/gazebo.launch.py`，**全选并将其彻底替换**为以下内容：
 
-请打开 `~/dummy_ws/src/dummy_grasping/src/grasp_executor.cpp`，**全选并彻底替换**为以下内容：
+```python
+import os
+import xacro
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription, TimerAction
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 
-```cpp
-#include <rclcpp/rclcpp.hpp>
-#include <moveit/move_group_interface/move_group_interface.h>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_ros/buffer.h>
-#include <geometry_msgs/msg/transform_stamped.hpp>
+def generate_launch_description():
+    share_dir = get_package_share_directory('dummy-ros2_description')
+    xacro_file = os.path.join(share_dir, 'urdf', 'dummy-ros2.xacro')
+    robot_description_config = xacro.process_file(xacro_file)
+    robot_urdf = robot_description_config.toxml()
 
-int main(int argc, char * argv[])
-{
-  rclcpp::init(argc, argv);
-  // 创建节点
-  auto node = std::make_shared<rclcpp::Node>("grasp_executor", rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
-  rclcpp::Logger logger = node->get_logger();
-  
-  RCLCPP_INFO(logger, "====== 🚀 终极流水线执行节点已启动 ======");
+    robot_state_publisher_node = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        parameters=[{'robot_description': robot_urdf, 'use_sim_time': True}]
+    )
 
-  // 1. 初始化 MoveIt 规划组接口
-  moveit::planning_interface::MoveGroupInterface arm_group(node, "dummy_arm");
-  moveit::planning_interface::MoveGroupInterface gripper_group(node, "gripper");
+    gazebo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([PathJoinSubstitution([FindPackageShare('gazebo_ros'), 'launch', 'gazebo.launch.py'])]),
+    )
 
-  // ==========================================
-  // 🌟 给 MoveIt 开挂：大幅放宽规划限制，专治 failed
-  // ==========================================
-  arm_group.setPlanningTime(10.0);             // 思考时间从 5 秒延长到 10 秒
-  arm_group.setNumPlanningAttempts(10);        // 一次算不出来？允许它反复尝试 10 次！
-  arm_group.setGoalPositionTolerance(0.02);    // 允许 2 厘米的位置误差（够抓就行）
-  arm_group.setGoalOrientationTolerance(0.2);  // 允许姿态有较大的歪斜，防止关节死锁
-  arm_group.setMaxVelocityScalingFactor(0.5);  // 降速 50%，让轨迹更平滑，不乱扭
-  arm_group.setMaxAccelerationScalingFactor(0.5); // 降低加速度，防止运动突变
+    spawn_entity = Node(
+        package='gazebo_ros',
+        executable='spawn_entity.py',
+        arguments=['-entity', 'dummy-ros2', '-topic', 'robot_description']
+    )
+    delayed_spawn = TimerAction(period=5.0, actions=[spawn_entity])
 
-  // 2. 初始化 TF 坐标监听器
-  tf2_ros::Buffer tf_buffer(node->get_clock());
-  tf2_ros::TransformListener tf_listener(tf_buffer);
+    # ========================================================
+    # 🌟 修复物理穿模：严格控制出生顺序，防止方块掉进桌子里
+    # ========================================================
 
-  geometry_msgs::msg::TransformStamped t_stamped;
-  
-  // 3. 苦苦等待 AI 视觉发送过来的坐标
-  RCLCPP_INFO(logger, "📡 正在监听 AI 视觉节点发送的坐标...");
-  while (rclcpp::ok()) {
-    try {
-      t_stamped = tf_buffer.lookupTransform("base_link", "target_object", tf2::TimePointZero);
-      break;
-    } catch (const tf2::TransformException & ex) {
-      rclcpp::sleep_for(std::chrono::milliseconds(500));
-    }
-  }
+    # 1. 第 5 秒：先生成桌子 (X: 0.40, 刚好在机械臂前方)
+    table_urdf_path = os.path.join(share_dir, 'urdf', 'table.urdf')
+    spawn_table = Node(
+        package='gazebo_ros', executable='spawn_entity.py',
+        arguments=['-entity', 'simple_table', '-file', table_urdf_path, '-x', '0.40', '-y', '0.0', '-z', '0.0']
+    )
+    delayed_spawn_table = TimerAction(period=5.0, actions=[spawn_table])
 
-  // 4. 解析目标坐标
-  double target_x = t_stamped.transform.translation.x;
-  double target_y = t_stamped.transform.translation.y;
-  double target_z = t_stamped.transform.translation.z;
-  RCLCPP_INFO(logger, "🎯 计算得出真实抓取坐标: X: %.3f, Y: %.3f, Z: %.3f", target_x, target_y, target_z);
+    # 2. 第 8 秒：等桌子彻底变硬后，再在桌面上方生成方块
+    # 桌子高 0.2m，方块出生在 0.22m，刚好落在桌面上
+    box_urdf_path = os.path.join(share_dir, 'urdf', 'target_box.urdf')
+    spawn_box = Node(
+        package='gazebo_ros', executable='spawn_entity.py',
+        arguments=['-entity', 'target_box', '-file', box_urdf_path, '-x', '0.40', '-y', '0.0', '-z', '0.22']
+    )
+    delayed_spawn_box = TimerAction(period=8.0, actions=[spawn_box])
 
-  // 5. 执行抓取流水线
-  RCLCPP_INFO(logger, ">> 动作 1: 张开抓夹...");
-  gripper_group.setNamedTarget("open");
-  gripper_group.move();
+    # 3. 延后加载控制器，确保模型完全加载
+    load_joint_state_broadcaster = Node(package="controller_manager", executable="spawner", arguments=["joint_state_broadcaster"])
+    load_arm_controller = Node(package="controller_manager", executable="spawner", arguments=["arm_controller"])
+    load_gripper_controller = Node(package="controller_manager", executable="spawner", arguments=["gripper_controller"])
 
-  RCLCPP_INFO(logger, ">> 动作 2: 移动到方块上方 (安全悬停)...");
-  // 使用 setPositionTarget 放弃强制姿态，只约束位置，高度预留 15 厘米
-  arm_group.setPositionTarget(target_x, target_y, target_z + 0.15); 
-  arm_group.move();
-
-  RCLCPP_INFO(logger, ">> 动作 3: 笔直下降...");
-  // 下降到刚好夹住方块的高度
-  arm_group.setPositionTarget(target_x, target_y, target_z + 0.02);
-  arm_group.move();
-
-  RCLCPP_INFO(logger, ">> 动作 4: 闭合抓夹...");
-  gripper_group.setNamedTarget("close");
-  gripper_group.move();
-
-  RCLCPP_INFO(logger, ">> 动作 5: 成功抓取，抬起回原位...");
-  arm_group.setNamedTarget("home");
-  arm_group.move();
-
-  RCLCPP_INFO(logger, "====== 🎉 完美通关！ ======");
-
-  rclcpp::shutdown();
-  return 0;
-}
+    return LaunchDescription([
+        robot_state_publisher_node, gazebo,
+        delayed_spawn, 
+        delayed_spawn_table, # 5秒出桌子
+        delayed_spawn_box,   # 8秒出方块
+        TimerAction(period=10.0, actions=[load_joint_state_broadcaster]),
+        TimerAction(period=11.0, actions=[load_arm_controller]),
+        TimerAction(period=11.5, actions=[load_gripper_controller]),
+    ])
 ```
 
-### 🎬 极速重测指南
+### 🎬 极速重启
 
-1. **重新编译执行器：**
-   保存文件后，在你的 `dummy_ws` 目录下执行极速编译命令：
-   ```bash
-   cd ~/dummy_ws
-   colcon build --packages-select dummy_grasping
-   ```
-2. **确认环境：** 确保你的 Gazebo、Python 视觉（绿字显示 Locked），以及 MoveIt 都在正常运行。最好把 Gazebo 里的桌子稍微拉近一点，确保它在机械臂面前。
-3. **发射这版带“外挂”的代码：**
-   ```bash
-   source ~/dummy_ws/install/setup.bash
-   ros2 launch dummy_grasping run_grasp.launch.py
-   ```
+替换保存后，无需编译，直接在终端重新启动物理世界：
+
+```bash
+ros2 launch dummy-ros2_description gazebo.launch.py
+```
+
+你会在几秒后看到：桌子稳稳地扎在地上，然后小蓝块“啪嗒”一下落在了桌子的正中央！这时候再配合你的视觉脚本和刚才加了外挂的 C++ 执行器，就可以进行抓取测试了！
