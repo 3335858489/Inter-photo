@@ -1,123 +1,41 @@
-我完全理解，不绕任何弯子了。这套代码直接融合了**时间同步修正（解决没动的问题）**、**手眼标定补偿（解决乱飞的问题）**和**碰撞高度修正（解决 failed 问题）**。
+要实现当你输入 `(0, 0, 90°, 0, 0, 0)` 时，机械臂呈现图中“7”字型的姿态（即前两个关节垂直，第三个关节转动 90 度），你需要在 URDF 中对 **Joint3** 的物理初始位置（安装位姿）进行调整。
 
-这是最终的完整闭环，请严格按照以下两步操作，彻底终结这个任务。
+目前的 URDF 中，Joint3 的 `origin` 是没有旋转的（`rpy="0 0 0"`），这意味着当控制指令为 0 时，Link 3 是相对于 Link 2 保持直连状态。
 
-### 🛠️ 第一步：替换最终完整版 C++ 代码
+### 修改方法
 
-请打开 `~/dummy_ws/src/dummy_grasping/src/grasp_executor.cpp`，**全选并彻底替换**为以下代码：
+你需要修改 `Joint3` 的 `origin` 属性。根据你的描述，有两种逻辑方案，推荐使用**方案一**：
 
-```cpp
-#include <rclcpp/rclcpp.hpp>
-#include <moveit/move_group_interface/move_group_interface.h>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_ros/buffer.h>
-#include <geometry_msgs/msg/transform_stamped.hpp>
+#### 方案一：修改物理安装角度（最直接）
+我们将 Joint3 的物理初始位置旋转 90 度。这样，在 ROS2 控制器看来，现在的“弯曲”就是它的 0 位。
 
-int main(int argc, char * argv[])
-{
-  rclcpp::init(argc, argv);
-  auto node = std::make_shared<rclcpp::Node>("grasp_executor", rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
-  
-  // 🌟 核心修复 1：强制开启仿真时间同步，打通 MoveIt 与 Gazebo 的控制权，拒绝“幽灵执行”
-  node->set_parameter(rclcpp::Parameter("use_sim_time", true));
-  
-  rclcpp::Logger logger = node->get_logger();
-  RCLCPP_INFO(logger, "====== 🚀 终极稳定执行节点 (修复全Bug版) 已启动 ======");
+找到 URDF 中的 `Joint3` 部分，将 `rpy` 修改如下：
 
-  moveit::planning_interface::MoveGroupInterface arm_group(node, "dummy_arm");
-  moveit::planning_interface::MoveGroupInterface gripper_group(node, "gripper");
-
-  // 放宽规划限制，防止报错
-  arm_group.setPlanningTime(10.0);
-  arm_group.setNumPlanningAttempts(10);
-  arm_group.setGoalPositionTolerance(0.02);
-  arm_group.setGoalOrientationTolerance(3.14); // 随意旋转，不强求姿态
-  arm_group.setMaxVelocityScalingFactor(0.4);
-
-  tf2_ros::Buffer tf_buffer(node->get_clock());
-  tf2_ros::TransformListener tf_listener(tf_buffer);
-  geometry_msgs::msg::TransformStamped t_stamped;
-  
-  RCLCPP_INFO(logger, "📡 正在监听 AI 视觉节点发送的坐标...");
-  while (rclcpp::ok()) {
-    try {
-      t_stamped = tf_buffer.lookupTransform("base_link", "target_object", tf2::TimePointZero);
-      break;
-    } catch (const tf2::TransformException & ex) {
-      rclcpp::sleep_for(std::chrono::milliseconds(500));
-    }
-  }
-
-  double raw_x = t_stamped.transform.translation.x;
-  double raw_y = t_stamped.transform.translation.y;
-  double raw_z = t_stamped.transform.translation.z;
-
-  // 🌟 核心修复 2：手眼标定补偿，将坐标强制拉回真实的桌面中心
-  double target_x = raw_x + 0.76; 
-  double target_y = raw_y;
-  double target_z = raw_z;
-
-  RCLCPP_INFO(logger, "🎯 视觉引导坐标: X: %.3f, Y: %.3f, Z: %.3f", target_x, target_y, target_z);
-
-  RCLCPP_INFO(logger, ">> 动作 1: 张开抓夹...");
-  gripper_group.setNamedTarget("open");
-  gripper_group.move();
-
-  RCLCPP_INFO(logger, ">> 动作 2: 移动到方块上方 (安全悬停)...");
-  arm_group.setPositionTarget(target_x, target_y, target_z + 0.15); 
-  arm_group.move();
-
-  // 🌟 核心修复 3：安全下降高度，Z轴补偿 +0.06，绝对防止砸穿桌面触发 aborted
-  RCLCPP_INFO(logger, ">> 动作 3: 笔直下降...");
-  arm_group.setPositionTarget(target_x, target_y, target_z + 0.06);
-  arm_group.move();
-
-  RCLCPP_INFO(logger, ">> 动作 4: 闭合抓夹...");
-  gripper_group.setNamedTarget("close");
-  gripper_group.move();
-
-  RCLCPP_INFO(logger, ">> 动作 5: 成功抓取，抬起回原位...");
-  arm_group.setNamedTarget("home");
-  arm_group.move();
-
-  RCLCPP_INFO(logger, "====== 🎉 抓取完成！ ======");
-  rclcpp::shutdown();
-  return 0;
-}
+```xml
+<joint name="Joint3" type="revolute">
+  <origin xyz="0.03665 0.0 0.146" rpy="0 1.5708 0"/> 
+  <parent link="link2_1_1"/>
+  <child link="link3_1_1"/>
+  <axis xyz="-1.0 0.0 0.0"/> <limit
+    lower="-3.14"
+    upper="3.14"
+    effort="150"
+    velocity="3.15" />
+</joint>
 ```
 
----
+#### 方案二：如果实物 0 位是垂直的，只需在控制时偏移
+如果你希望软件里发送 `1.57` (90°) 时它才变成“7”字型，而发送 `0` 时它是垂直的，那么你**不需要修改 URDF**。你只需要在发送控制指令（例如通过命令行或代码）时，给 Joint3 赋值 `1.57` 即可：
 
-### 🎬 第二步：严格按照顺序发车（极其关键）
+* **命令行测试命令：**
+    ```bash
+    ros2 topic pub /forward_position_controller/commands std_msgs/msg/Float64MultiArray "{data: [0.0, 0.0, 1.5708, 0.0, 0.0, 0.0]}"
+    ```
 
-编译代码：
-```bash
-cd ~/dummy_ws
-colcon build --packages-select dummy_grasping
-```
+### 关键点排查
+1.  **弧度制**：ROS2 Control 接收的是**弧度**（Radian）。$90^\circ = 1.570796$ 弧度。如果你输入数字 `90`，机械臂会疯狂旋转。
+2.  **坐标系对齐**：修改 `rpy` 后，如果发现 Link3 的旋转中心偏移了，你可能需要同时微调 `link3_1_1` 标签下的 `<visual>` 和 `<collision>` 的 `origin`。
+3.  **方向问题**：如果修改 `rpy="0 1.5708 0"` 后机械臂是向后弯的，请改回 `rpy="0 -1.5708 0"`。
 
-请**关掉所有旧终端**，必须严格按照以下顺序和间隔时间启动，这是打破“幽灵执行”的唯一方法：
-
-1. **终端 1（唤醒物理世界）：**
-   ```bash
-   ros2 launch dummy-ros2_description gazebo.launch.py
-   ```
-   *⚠️ 等待 15 秒！直到桌子和方块完全掉落稳固。*
-
-2. **终端 2（绑定大脑）：**
-   ```bash
-   ros2 launch dummy_moveit_config demo.launch.py
-   ```
-   *⚠️ 等待 RViz 完全弹出来，确保 MoveIt 识别到了 Gazebo 里的机械臂。*
-
-3. **终端 3（开启视觉）：**
-   ```bash
-   python3 ~/dummy_ws/src/dummy_grasping/src/vision_grasp.py
-   ```
-   *⚠️ 确认画面出现绿字 Locked。*
-
-4. **终端 4（执行抓取）：**
-   ```bash
-   source ~/dummy_ws/install/setup.bash
-   ros2 launch dummy_grasping run_grasp.launch.py
-   ```
+**建议：**
+先在 Rviz2 中查看 `RobotModel`。如果实物在所有关节为 0 时是完全垂直的，那么 URDF 应该保持 `rpy="0 0 0"`。你只需在程序逻辑中记录：**“7”字型姿态的 Target Positions 是 `[0, 0, 1.57, 0, 0, 0]`**。
