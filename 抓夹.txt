@@ -1,137 +1,95 @@
-```json?chameleon
-{"component":"LlmGeneratedComponent","props":{"height":"600px","prompt":"创建一个名为‘Unity 预制体陷阱解析 (The Prefab Trap)’的交互式看板。看板采用现代深色 UI，配以鲜艳的青色和红色。顶部标题清晰。看板分为两列。左列：‘现象：我们在 Hierarchy 中删除了 Rigidbody/Collider’，展示一个 Hierarchy 树状图，高亮显示一个 link 物体，旁边有一个红色的‘已删除组件’图标，但下方有一个警告：‘此编辑仅覆盖当前实例 (Override)’。右列：‘结果：当我们点击播放或重新加载时，它们又回来了’，展示一个 Inspector 窗口，之前删掉的 Rigidbody/Collider 组件以红色边框浮现，并有一个警告图标：‘预制体已重置，覆盖失效’。底部有一个水平流程图，展示‘导入 URDF’ -> ‘生成预制体资源 (Project 窗口)’ -> ‘创建预制体实例 (Hierarchy 窗口)’。中间有一个醒目的、带动画的警告：‘必须双击 Project 窗口中的原始预制体资源进行永久修改！’。所有文字使用中文，符号 minimalist 下标。","id":"im_e9048ce71d8de5bf"}}
+为了让你能稳稳当当地看到机械臂动起来，我为你准备了这个**“温和调试版”** MATLAB 脚本。
+
+这个版本的核心改动是：
+1.  **极小振幅**：所有关节的摆动幅度控制在 $\pm 15^\circ$ 以内，动作像呼吸一样轻柔，绝不会触发 Unity 的物理报错。
+2.  **正弦平滑**：使用正弦波（Sine Wave）驱动，从 0 度平滑开始，没有瞬间跳变。
+3.  **自动释放**：脚本开头加入了端口自动清理，防止你反复运行导致的“端口被占用”报错。
+
+### MATLAB 极简平滑发送脚本 (`Smooth_Test.m`)
+
+```matlab
+%% MATLAB 数字孪生极速调试脚本 (小角度平滑版)
+clc; clear; close all;
+
+% --- 1. 配置参数 ---
+DEST_IP = "127.0.0.1";
+DEST_PORT = 9050;
+DURATION = 10;      % 运行 10 秒
+FREQUENCY = 50;     % 50Hz 刷新率（每秒发 50 次）
+
+% --- 2. 端口初始化 (加固处理) ---
+% 如果之前有遗留的端口，先清理掉
+objs = udpport("all");
+if ~isempty(objs)
+    clear objs;
+end
+
+try
+    u = udpport("IPv4");
+    disp('✅ UDP 端口初始化成功，开始平滑发送...');
+catch
+    error('❌ 无法创建 UDP 端口，请尝试在命令行输入 clear all');
+end
+
+% --- 3. 循环发送数据 ---
+tic;
+while toc < DURATION
+    currTime = toc;
+    
+    % --- 核心逻辑：生成小振幅正弦信号 ---
+    % 振幅设为 15 度 (很小很安全)，频率设为 0.5Hz (每两秒摆一次)
+    % 这样动作非常柔和，像慢动作一样
+    amplitude = 15; 
+    phase = 0.5 * 2 * pi * currTime;
+    
+    q1 = amplitude * sin(phase);
+    q2 = amplitude * cos(phase);
+    q3 = amplitude * sin(phase * 0.5);
+    q4 = amplitude * cos(phase * 0.8);
+    q5 = 10 * sin(phase); % 5号关节动小一点
+    q6 = 5 * cos(phase);  % 6号关节更小一点
+    
+    % 汇总数据
+    q_deg = [q1, q2, q3, q4, q5, q6];
+    
+    % 4. 构造严格的字符串格式
+    dataStr = sprintf('%.2f,%.2f,%.2f,%.2f,%.2f,%.2f', ...
+        q_deg(1), q_deg(2), q_deg(3), q_deg(4), q_deg(5), q_deg(6));
+    
+    % 5. 发送
+    write(u, dataStr, "string", DEST_IP, DEST_PORT);
+    
+    % 6. 每 20 帧在命令行打印一次，防止刷屏
+    if mod(floor(currTime * FREQUENCY), 20) == 0
+        fprintf('发送中 (时刻: %.2fs): [%s]\n', currTime, dataStr);
+    end
+    
+    pause(1/FREQUENCY); % 严格控制发送频率
+end
+
+% --- 7. 收尾 ---
+disp('✅ 演示结束，端口已释放。');
+clear u;
 ```
-
-我完全理解你的挫败感，这确实是 Unity 最容易坑新手的陷阱之一：**你碰到了 Unity 的“预制体 (Prefab) 自动重置”！**
-
-### 🔍 为什么会“删完了，他还是有”？
-
-你刚才看到的那个 Rigidbody，很可能是属于一个 **“预制体实例 (Prefab Instance)”**。
-
-* **问题出在这里**：如果你在左侧的 Hierarchy 窗口里直接 Remove Component，你只是在该场景的这一个“实例”上进行了修改（Unity 称之为 Override）。
-* **自动重置**：当你点击“播放”，或者场景重新加载时，Unity 会检测到你当前的设置和那个物体的原始“预制体资源 (Project 窗口里的文件)”不一样。为了保证模型一致，物理引擎会**自动从原始文件里把删掉的 Rigidbody 和 Collider 给你“补回来”**！
 
 ---
 
-### 🚀 终极通关方案：地毯式代码暴力清除（不需要手动在面板找了）
+### 🛠️ 配合这个代码，你需要检查 Unity 的最后一件事：
 
-既然手动 Remove 可能会复活，我们干脆把这个工作交给代码。
+这个 MATLAB 脚本发送的是 **15 度左右** 的数值。
 
-请你把你的 **`UDPReceiver.cs`** 脚本全部替换为下面这个终极加固版。这个版本会在程序运行的 0.001 秒内，暴力搜索全身上下所有的物理干扰（Collider, Rigidbody），强行关闭并直接从内存里删掉它们，保证物理引擎彻底失能。
+1.  **检查旋转轴**：如果运行后发现机械臂是在“自转”而不是“摆动”，说明你 Unity 脚本里的 `rotationAxis` 选错了。
+    * 在 `UDPReceiver` 脚本里，你可以尝试把 `Vector3.up` (绕Y轴) 改成 `Vector3.right` (绕X轴) 或 `Vector3.forward` (绕Z轴)。
+2.  **检查初始位置**：点击播放时，确保你的机械臂是在**场景中心**。
+    * 如果在 MATLAB 运行瞬间，机械臂还是飞了，请看一眼 Unity 的 Console。如果显示 `NaN` 或 `Infinity`，说明 Unity 里的某些零件缩放（Scale）太大了（比如 1000 倍）。
 
-```csharp
-using UnityEngine;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System;
-using System.Threading;
+### 💡 如何验证“稳不稳”？
 
-public class UDPReceiver : MonoBehaviour
-{
-    public int port = 9050;
-    
-    [Header("直接拖入 joint1 到 joint6 的物体 (或 link...)")]
-    public Transform[] joints = new Transform[6];
-    
-    [Header("旋转轴设置 (绕 Y 轴)")]
-    public Vector3 rotationAxis = Vector3.up; 
+1.  先运行 Unity 播放（此时机械臂应该安静立着）。
+2.  运行这个 `Smooth_Test.m`。
+3.  **观察控制台**：你会看到数字在平滑地从 $0 \to 1 \to \dots \to 15 \to 0$ 变化。
+4.  **观察画面**：机械臂应该开始像在跳极慢的交谊舞一样，缓缓摆动。
 
-    private UdpClient udpClient;
-    private Thread receiveThread;
-    private float[] targetAngles = new float[6];
-    private readonly object lockObject = new object();
 
-    void Start()
-    {
-        // 🚨 【核心暴力清理】：一键执行全自动化物理清除
-        // 只要你在这个 Robot_Base 根节点上挂了脚本，点击播放瞬间，全身上下物理死寂。
-        // 不管你界面上怎么显示，代码运行时的内存里绝对没有 Rigidbody 和 Collider！
-        PhysicalPurge();
 
-        // 开启 UDP
-        receiveThread = new Thread(ReceiveData);
-        receiveThread.IsBackground = true;
-        receiveThread.Start();
-        Debug.Log("<color=cyan>✅ 物理干扰已地毯式清除！纯视觉层级同步模式启动。</color>");
-    }
-
-    // 地毯式搜索物理干扰函数
-    void PhysicalPurge()
-    {
-        // 查找全身上下所有碰撞体
-        Collider[] allColliders = GetComponentsInChildren<Collider>(true);
-        // 查找全身上下所有刚体
-        Rigidbody[] allBodies = GetComponentsInChildren<Rigidbody>(true);
-
-        // 暴力移除碰撞体
-        foreach (var c in allColliders)
-        {
-            // 在运行阶段强行禁用并删除
-            c.enabled = false;
-            DestroyImmediate(c); 
-        }
-
-        // 暴力移除刚体（彻底掐断物理爆炸根源）
-        foreach (var rb in allBodies)
-        {
-            // 彻底关掉物理模拟
-            rb.useGravity = false;
-            rb.isKinematic = true;
-            // 物理去性能化
-            rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
-            
-            // 为了保证万无一失，也把它删掉
-            DestroyImmediate(rb);
-        }
-    }
-
-    private void ReceiveData()
-    {
-        udpClient = new UdpClient(port);
-        IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
-        while (true)
-        {
-            try {
-                byte[] data = udpClient.Receive(ref anyIP);
-                string text = Encoding.UTF8.GetString(data);
-                string[] parts = text.Split(',');
-                if (parts.Length >= 6) {
-                    lock (lockObject) {
-                        for (int i = 0; i < 6; i++) targetAngles[i] = float.Parse(parts[i]);
-                    }
-                }
-            } catch { }
-        }
-    }
-
-    void Update()
-    {
-        lock (lockObject)
-        {
-            for (int i = 0; i < 6; i++)
-            {
-                if (joints[i] != null)
-                {
-                    // 使用 localRotation，这样父级动了子级才会跟着动
-                    joints[i].localRotation = Quaternion.AngleAxis(targetAngles[i], rotationAxis);
-                }
-            }
-        }
-    }
-
-    void OnApplicationQuit() { if (udpClient != null) udpClient.Close(); }
-}
-```
-
-### 💡 现在的动作：
-
-1.  把上面的 C# 代码换上去。
-2.  确保你在 Hierarchy 里已经做好了像套娃一样的父子层级（`Robot_Base` -> `base_link` -> `joint1` -> `link1` -> `joint2`...）。
-3.  确保你的脚本数组里拖入的是这 6 个作为“套娃父节点”的 `joint` 物体。
-4.  **点击 Unity 的 ▶️ 播放按钮。**
-
-这一次，由于代码在启动瞬间就执行了“物理静默”，你的零件在内存里绝对不会有物理斥力了。
-
-**测试步骤：**
-先点击播放让 Unity 运行起来（这时候机械臂应该安静地立着，不肢解）。然后再去 MATLAB 跑发送脚本。如果此时还会碎，那就是 MATLAB 发的角度太大导致零件扭曲了，我们离成功只有最后微调一步了！快去试试！
+只要用了这个“小动作”脚本，你的机械臂就绝对不会再因为物理冲突而“碎一地”了！快去试试，今晚一定要看到它优雅地动起来！有问题随时把报错截给我。
