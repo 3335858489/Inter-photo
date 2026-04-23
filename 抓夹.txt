@@ -6,7 +6,127 @@
 
 ### 🚀 方案调整：全 Windows 环境下的“纯视觉同步”
 
-我们要把机械臂看作一堆零件，直接通过代码告诉每一个零件该转多少度。没有物理引擎，就永远不会“碎一地”。
+我们要把机械臂看作一堆零件，直接通过代码告诉每一个零件该转多少度。没有物理引擎，就永远不会“碎一地”。看了你的视频，我这下彻底看清问题的“病灶”在哪里了。**这不是代码的问题，而是你的机械臂在 Unity 里的“家谱（层级关系）”完全乱了。**
+
+视频 0:05 秒处暴露了两个致命伤，导致它一运行就“肢解”：
+
+### 致命伤 1：平级的“散装”结构（最根本原因）
+你看左侧的 `Hierarchy` 面板，你的 `joint1`, `joint2`, `joint3`... 全都是平排站着的，它们都是 `Robot_Base` 的儿子。
+* **现实中的机械臂**：是大臂连着小臂，小臂连着手腕。如果大臂转了，小臂必须跟着走。
+* **你现在的 Unity 结构**：它们互不相干。你的代码让 `joint1` 转了，$90^\circ$，但 `joint2` 还呆在原地没动。这就像是一个人跳舞，胳膊自己飞出去了，身体还留在原地。**这就是为什么它会“碎一地”。**
+
+### 致命伤 2：被隐藏的“物理地雷”
+虽然你没看见 `Articulation Body`，但视频里零件乱跳的样子说明它们身上肯定带着 **`Mesh Collider`（网格碰撞体）**。
+* 因为零件模型是重叠在一起的，Unity 默认的物理引擎检测到它们“撞”了，拼命想把它们弹开。
+
+---
+
+### 🚀 30 分钟极速修复指南
+
+为了在后天能给老师演示，我们直接跳过复杂的机器人插件，用最暴力的 **“父子绑定法”**。
+
+#### 第一步：重组“家谱”（手动父子化）
+在左侧 `Hierarchy` 窗口，用鼠标拖动，把它们像套娃一样套起来。**目标结构必须是这样的：**
+
+* `Robot_Base`
+    * `base_link`
+        * `joint1`
+            * `link1_1_1`
+                * **`joint2`** (把它拖进 link1 里面)
+                    * `link2_1_1`
+                        * **`joint3`** (把它拖进 link2 里面)
+                            * ...以此类推，直到 `joint6`
+
+> **原理**：这样只要 `joint1` 一动，下面所有的零件都会跟着动，绝对不会再“肢解”飞散！
+
+#### 第二步：暴力清除所有碰撞体
+1.  在左侧选中 `Robot_Base` 及其下面所有的子物体。
+2.  看右侧 `Inspector` 面板。
+3.  点击搜索框，输入 `Collider`。
+4.  如果你看到任何 **`Mesh Collider`** 或者 **`Box Collider`**，统统**点击右键 -> Remove Component**。
+5.  **目标**：每一个 `link` 身上只能有 `Mesh Filter`（形状）和 `Mesh Renderer`（皮肤）。
+
+#### 第三步：使用“局部坐标”驱动脚本
+家谱改好了，我们要用 `localRotation`（相对父级的旋转）来驱动。请把你的 `UDPReceiver.cs` 换成这个“最终救命版”：
+
+```csharp
+using UnityEngine;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System;
+using System.Threading;
+
+public class UDPReceiver : MonoBehaviour
+{
+    public int port = 9050;
+    [Header("必须按顺序拖入 joint1 到 joint6")]
+    public Transform[] joints = new Transform[6];
+    
+    // 自动适配旋转轴（ Dummy 一般是绕 Y 或 Z 转，你可以通过 Inspector 调整）
+    public Vector3 rotationAxis = Vector3.up; 
+
+    private UdpClient udpClient;
+    private Thread receiveThread;
+    private float[] targetAngles = new float[6];
+    private readonly object lockObject = new object();
+
+    void Start()
+    {
+        // 自动查找并关闭所有物理干扰
+        foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
+        if (GetComponent<Rigidbody>()) GetComponent<Rigidbody>().isKinematic = true;
+
+        receiveThread = new Thread(ReceiveData);
+        receiveThread.IsBackground = true;
+        receiveThread.Start();
+        Debug.Log("✅ 全 Windows 视觉同步模式已就绪！");
+    }
+
+    private void ReceiveData()
+    {
+        udpClient = new UdpClient(port);
+        IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
+        while (true) {
+            try {
+                byte[] data = udpClient.Receive(ref anyIP);
+                string text = Encoding.UTF8.GetString(data);
+                string[] parts = text.Split(',');
+                if (parts.Length >= 6) {
+                    lock (lockObject) {
+                        for (int i = 0; i < 6; i++) targetAngles[i] = float.Parse(parts[i]);
+                    }
+                }
+            } catch { }
+        }
+    }
+
+    void Update()
+    {
+        lock (lockObject) {
+            for (int i = 0; i < 6; i++) {
+                if (joints[i] != null) {
+                    // 【核心修改】使用 localRotation，这样父级动了子级才会跟着动
+                    joints[i].localRotation = Quaternion.AngleAxis(targetAngles[i], rotationAxis);
+                }
+            }
+        }
+    }
+
+    void OnApplicationQuit() { if (udpClient != null) udpClient.Close(); }
+}
+```
+
+---
+
+### 💡 你接下来的动作：
+1.  **手动拖拽**：把左边的层级关系按照“套娃”的方式排好（非常重要！）。
+2.  **删掉 Collider**：把所有零件上的碰撞组件删光。
+3.  **运行**：先点 Unity 播放。此时机械臂应该是完整的，不会倒下。
+4.  **跑 MATLAB**：运行你的 `udp_test.m`。
+
+
+**只要层级（Parenting）对了，机械臂就再也不会肢解了！** 赶紧去拖动一下左边的层级试试，如果还是不理解怎么“套娃”，随时告诉我。
 
 #### 第一步：暴力清理（斩断“狂舞”的根源）
 你的机械臂之所以会飞，是因为它身上带着“物理灵魂”。我们要把它变成“木偶”。
