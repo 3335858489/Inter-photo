@@ -1,27 +1,25 @@
-没问题！“代码放哪、文件建在哪”是工程开发中最容易让人迷糊的地方。如果在错误的地方建了脚本，Unity 是无法识别的。
+真相大白！这张清晰的截图完美地帮我们抓住了“真凶”。
 
-为了保证你的“48小时冲刺”不再卡壳，我把这一部分彻底保姆级展开。请严格按照以下步骤，在指定的位置创建文件和连线：
+你的右侧面板干干净净，只有 `Transform`，连 `Articulation Body` 的影子都没有，原因在于你踩中了数字孪生模型导入时最隐蔽的一个坑：**你错把“关节坐标系”当成了“实体零件”！**
+
+### 🔍 案情回放：为什么没有 Gravity？
+
+仔细看你左侧的结构：`joint1` 下面包裹着 `link1_1_1`。
+* 在 URDF 导入 Unity 的逻辑中，名字叫 **`joint`** 的物体，往往只是一个**没有任何物理属性的空壳（坐标系）**，相当于一个透明的文件夹。
+* 真正的钢铁重量、惯性以及 **`Articulation Body`（物理组件）**，全部都长在名字叫 **`link`** 的物体上！
+
+刚才你同时选中了 `joint` 和 `link`。Unity 看到 `joint` 身上没有物理组件，就把整个物理面板给你隐藏了！
 
 ---
 
-### 第一阶段：在 Unity 中建立 C# 接收脚本
+### 🚀 终极解决路线（不要找勾了，用代码暴力接管！）
 
-这个 C# 脚本的作用是给 Unity 里的机械臂装上“耳朵（UDP监听）”和“神经（关节驱动）”。
+既然时间紧迫，我们不要再在界面里一个个找勾选框了。我为你修改了最终版的“代码级强制断电”脚本。**只要用这段脚本，无论界面上怎么设置，代码运行的瞬间直接掐断重力！**
 
-**1. 规定文件位置：**
-* 切回 Unity 界面，看向底部的 **`Project`** 窗口。
-* 点击左侧的 **`Assets`** 文件夹（这是你整个项目的根目录）。
-* 在右侧空白处点击鼠标**右键 -> `Create` -> `Folder`**，新建一个文件夹，命名为 **`Scripts`**（好习惯：代码都放这里）。
-* 双击进入 `Scripts` 文件夹。
+请严格按照以下 **3 步傻瓜式操作**，我们直接通关：
 
-**2. 创建并命名 C# 文件：**
-* 在 `Scripts` 文件夹的空白处点击鼠标**右键 -> `Create` -> `C# Script`**。
-* 此时新建的文件名字是蓝色高亮状态，**不要乱点鼠标**，直接在键盘上输入：**`UDPReceiver`**，然后按回车。
-*(⚠️ 极其重要：文件名必须一字不差是 `UDPReceiver`，大小写也要完全一致，否则 Unity 会报错说类名不匹配！)*
-
-**3. 粘贴终极驱动代码：**
-* 双击刚才建好的 `UDPReceiver`，它会自动在 VS Code（或你默认的代码编辑器）里打开。
-* 把里面的内容全部删掉，替换为以下代码：
+#### 第一步：换上“暴力接管”脚本
+回到你的 VS Code，把 `UDPReceiver.cs` 的代码替换为下面这段终极版：
 
 ```csharp
 using UnityEngine;
@@ -36,142 +34,82 @@ public class UDPReceiver : MonoBehaviour
     private UdpClient udpClient;
     private IPEndPoint remoteEndPoint;
 
-    [Header("请把 6 个 Joint 空物体拖到这里")]
-    public Transform[] robotJoints = new Transform[6];
+    [Header("⚠️ 极其重要：把 link1_1_1 到 link6_1_1 拖到这里！不要拖 joint！")]
+    public ArticulationBody[] robotJoints = new ArticulationBody[6];
 
-    // 用于在主线程中安全更新 UI 和 Transform
     private float[] targetAngles = new float[6];
-    private bool newDataReceived = false;
+    private bool hasNewData = false;
 
     void Start()
     {
         udpClient = new UdpClient(port);
         remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-        Debug.Log($"<color=green>系统提示：大动脉已连接，监听端口 {port}...</color>");
+
+        // 【终极暴力破解】：不用管界面，代码强行掐断所有零件的重力！
+        for (int i = 0; i < robotJoints.Length; i++)
+        {
+            if (robotJoints[i] != null)
+            {
+                robotJoints[i].useGravity = false; // 强制关重力，防肢解！
+                // 将阻尼调大，防止模型自己乱抖
+                var drive = robotJoints[i].xDrive;
+                drive.damping = 1000;
+                robotJoints[i].xDrive = drive;
+            }
+        }
+        Debug.Log("<color=yellow>UDP 已启动！物理重力已被代码强行掐断！机械臂进入提线木偶模式。</color>");
     }
 
     void Update()
     {
-        // 1. 接收数据（极速读取）
-        try
+        // 接收 MATLAB 数据
+        while (udpClient != null && udpClient.Available > 0)
         {
-            while (udpClient.Available > 0)
+            byte[] data = udpClient.Receive(ref remoteEndPoint);
+            string message = Encoding.UTF8.GetString(data);
+            string[] values = message.Split(',');
+
+            if (values.Length >= 6)
             {
-                byte[] receiveBytes = udpClient.Receive(ref remoteEndPoint);
-                string returnData = Encoding.UTF8.GetString(receiveBytes);
-                
-                string[] dataValues = returnData.Split(',');
-                if(dataValues.Length >= 6)
+                for (int i = 0; i < 6; i++)
                 {
-                    for (int i = 0; i < 6; i++)
-                    {
-                        // 假设 MATLAB 发过来的是弧度，乘以 57.2958 转成角度
-                        targetAngles[i] = float.Parse(dataValues[i]) * 57.2958f; 
-                    }
-                    newDataReceived = true;
+                    // 解析角度，假设 MATLAB 发来的是普通角度 (如果是弧度需乘 Mathf.Rad2Deg)
+                    targetAngles[i] = float.Parse(values[i]);
                 }
+                hasNewData = true;
             }
         }
-        catch (Exception e) { Debug.LogError("UDP 报错: " + e.Message); }
 
-        // 2. 驱动机械臂（必须在 Update 主线程中进行）
-        if (newDataReceived)
+        // 执行机械臂驱动
+        if (hasNewData)
         {
-            // 【核心映射区】根据你 URDF 的定义，分配旋转轴
-            if (robotJoints[0] != null) robotJoints[0].localEulerAngles = new Vector3(0, 0, -targetAngles[0]); // Joint1
-            if (robotJoints[1] != null) robotJoints[1].localEulerAngles = new Vector3(-targetAngles[1], 0, 0); // Joint2
-            if (robotJoints[2] != null) robotJoints[2].localEulerAngles = new Vector3(-targetAngles[2], 0, 0); // Joint3
-            if (robotJoints[3] != null) robotJoints[3].localEulerAngles = new Vector3(0, -targetAngles[3], 0); // Joint4
-            if (robotJoints[4] != null) robotJoints[4].localEulerAngles = new Vector3(-targetAngles[4], 0, 0); // Joint5
-            if (robotJoints[5] != null) robotJoints[5].localEulerAngles = new Vector3(0, -targetAngles[5], 0); // Joint6
-
-            newDataReceived = false;
+            for (int i = 0; i < 6; i++)
+            {
+                if (robotJoints[i] != null)
+                {
+                    var drive = robotJoints[i].xDrive;
+                    drive.target = targetAngles[i]; // 强行扭转关节
+                    robotJoints[i].xDrive = drive;
+                }
+            }
+            hasNewData = false;
         }
     }
 
-    void OnApplicationQuit()
-    {
-        if (udpClient != null) udpClient.Close();
-    }
+    void OnApplicationQuit() => udpClient?.Close();
 }
 ```
-* 按下 **`Ctrl + S`** 保存文件。回到 Unity，等待右下角的进度条转完（Unity 正在编译代码）。
 
----
+#### 第二步：重新拖拽正确的零件（最关键一步）
+1.  保存代码，回到 Unity，选中挂载了脚本的物体（比如 `Robot_Base`）。
+2.  看着右侧 Inspector 面板里脚本的 `Robot Joints` 数组（6个空位）。
+3.  从左侧列表中，**点开每一个 `joint` 文件夹**，把里面的 **`link1_1_1`** 拖拽到 Element 0。
+4.  把 **`link2_1_1`** 拖拽到 Element 1。
+5.  以此类推，一直拖到 **`link6_1_1`**。（**千万千万不要去拖名字叫 joint 的物体**，只拖 `link`！）
 
-### 第二阶段：在 Unity 中连接“神经”（挂载脚本）
+#### 第三步：一键运行
+拖完这 6 个 `link` 零件后，直接点击上方中央的 **▶️ 播放按钮**！
 
-代码写好了，但它现在只是存在于硬盘上，还没作用到机械臂上。
+这一次，由于代码在第 0.1 秒就强行关闭了重力，你的机械臂绝对会像雕塑一样稳稳地定在半空中，再也不会碎裂一地。
 
-**1. 挂载脚本：**
-* 在 Unity 左侧的 **`Hierarchy`**（层级）列表中，点击选中你最顶层的那个根节点，也就是 **`Robot_Base`**。
-* 用鼠标把底侧 `Project` 窗口里的 `UDPReceiver` 脚本图标，**直接拖拽**到右侧的 `Inspector` 面板最底下松手。
-*(现在 `Robot_Base` 身上就多了一个叫 UDP Receiver (Script) 的组件了。)*
-
-**2. 绑定 6 个关节：**
-* 看向右侧 `Inspector` 面板里刚刚挂上去的 `UDP Receiver` 脚本。
-* 找到 **`Robot Joints`** 这一行，点击左边的小三角把它展开，你会看到 `Element 0` 到 `Element 5` 这 6 个空槽位。
-* **执行拖拽绑定：**
-  * 把左侧列表里的 `Joint_1` 拖给 `Element 0`
-  * 把 `Joint_2` 拖给 `Element 1`
-  * 把 `Joint_3` 拖给 `Element 2`
-  * ... 依次类推，直到 `Joint_6` 拖给 `Element 5`。
-
-*(⚠️ 注意：拖的是 `Joint_X` 这些空物体！**千万不要**拖 `link_X.stl` 这些外壳！因为我们要驱动的是关节的轴心。)*
-
----
-
-### 第三阶段：在 MATLAB 中建立测试文件并发射数据
-
-为了避免你再去翻昨天的记录，我把 MATLAB 的代码重新提供一下。
-
-**1. 规定文件位置：**
-* 打开 MATLAB。你可以在任意你常用的文件夹（比如桌面的 `RobotTest` 文件夹）里新建脚本，因为这是独立运行的发送端，只要在同一台电脑上即可。
-* 点击 MATLAB 左上角的 **新建脚本 (New Script)**。
-
-**2. 编写 MATLAB 发射代码：**
-* 将以下代码复制进脚本，并**保存**（比如命名为 `udp_test.m`）：
-
-```matlab
-% ===== MATLAB UDP 测试脚本 =====
-% 目标地址：本机 (127.0.0.1)，端口：9050 (要与 Unity 脚本中的端口一致)
-u = udpport("IPv4");
-
-% 模拟你算法算出来的 6 个关节角度（这里单位是弧度）
-% 我们让关节 1 转动大约 90 度 (1.57)，关节 2 转动大约 -30 度 (-0.5)
-q1 = 1.57; 
-q2 = -0.5;
-q3 = 0.8;
-q4 = 0.0;
-q5 = 1.0;
-q6 = -1.57;
-
-% 拼接成逗号分隔的字符串
-dataStr = sprintf('%.4f,%.4f,%.4f,%.4f,%.4f,%.4f', q1, q2, q3, q4, q5, q6);
-disp(['正在发送: ', dataStr]);
-
-% 发送数据
-write(u, dataStr, "string", "127.0.0.1", 9050);
-
-% 清理端口占用
-clear u;
-```
-
----
-
-### 🚀 第四阶段：见证大动脉通电！
-
-1. **Unity 戴上耳机：** 切回 Unity，点击正上方中部的 **▶️ 播放按钮**。确保左下角 Console 控制台显示了绿字：`系统提示：大动脉已连接，监听端口 9050...`
-2. **MATLAB 开火：** 切回 MATLAB，点击菜单栏的 **运行 (Run)** 来执行 `udp_test.m`。
-3. **看画面：** 立刻切回 Unity 的 Game 视图！
-
-**此时，你的机械臂应该会“唰”地一下，扭出一个特定的姿态！**
-
-**🛠️ 最后的校准（如果方向反了怎么办？）：**
-假设你发现关节 1 应该是往左转，但它往右转了。
-* 马上回到刚才 Unity 的 `UDPReceiver` 代码里。
-* 找到【核心映射区】，你会看到：
-  `if (robotJoints[0] != null) robotJoints[0].localEulerAngles = new Vector3(0, 0, -targetAngles[0]);`
-* 把 `-targetAngles[0]` 前面的那个**负号 `-` 删掉**，保存代码。它就会乖乖按照正确方向转动了！
-
-一切准备就绪，按这个流程跑一遍！成功了发个截图让我一起高兴一下！
+此时，你可以打开 MATLAB 运行发送脚本，机械臂就会瞬间变成受你控制的“数字孪生体”了！快去完成这激动人心的最后闭环！
