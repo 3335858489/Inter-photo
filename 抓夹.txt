@@ -5,7 +5,7 @@ using System.Text;
 using System;
 using System.Threading;
 
-// 🚨 这一段结构体是让每个关节都有独立坐标轴的关键！
+// 1. 结构体定义：必须放在最外面，这是让每个关节都有独立坐标轴的关键！
 [System.Serializable]
 public class RobotJointConfig
 {
@@ -16,15 +16,16 @@ public class RobotJointConfig
     public Vector3 rotationAxis = new Vector3(0, 1, 0); 
 }
 
+// 2. 主控脚本类
 public class UDPReceiver : MonoBehaviour
 {
     [Header("网络配置")]
     public int port = 9050;
     
-    [Header("平滑度 (0-1)")]
+    [Header("动作平滑度 (0-1，越小越柔和)")]
     public float smoothness = 0.3f;
 
-    [Header("【在这里独立配置 6 个关节】")]
+    [Header("【六轴独立配置阵列】(展开并把 Size 改为 6)")]
     public RobotJointConfig[] jointConfigs = new RobotJointConfig[6];
 
     private UdpClient udpClient;
@@ -35,7 +36,7 @@ public class UDPReceiver : MonoBehaviour
 
     void Start()
     {
-        // 暴力清理物理组件，防止散架脱落
+        // --- 暴力清理物理组件（防散架核心） ---
         foreach (var rb in GetComponentsInChildren<Rigidbody>(true)) {
             rb.isKinematic = true; 
             Destroy(rb); 
@@ -44,9 +45,13 @@ public class UDPReceiver : MonoBehaviour
             Destroy(c); 
         }
 
+        // --- 启动 UDP 接收线程 ---
         receiveThread = new Thread(ReceiveData);
         receiveThread.IsBackground = true;
         receiveThread.Start();
+        
+        // --- 控制台成功提示（你期待的绿色字样） ---
+        Debug.Log("<color=green>✅ 完美套娃！六轴独立坐标系已就绪，物理引擎已安全卸载，等待 MATLAB 数据...</color>");
     }
 
     private void ReceiveData()
@@ -71,12 +76,13 @@ public class UDPReceiver : MonoBehaviour
     {
         lock (lockObject) {
             for (int i = 0; i < 6; i++) {
-                if (i < jointConfigs.Length && jointConfigs[i].jointTransform != null) {
+                // 确保数组不越界，且你已经在界面上拖入了物体
+                if (i < jointConfigs.Length && jointConfigs[i] != null && jointConfigs[i].jointTransform != null) {
                     
-                    // 加入平滑过渡
+                    // 平滑插值计算当前角度
                     currentDisplayAngles[i] = Mathf.Lerp(currentDisplayAngles[i], targetAngles[i], smoothness);
                     
-                    // 核心：分别使用各自设置的旋转轴进行旋转
+                    // 核心驱动：使用局部坐标系 (localRotation) 结合该关节专属的旋转轴 (rotationAxis)
                     jointConfigs[i].jointTransform.localRotation = Quaternion.AngleAxis(currentDisplayAngles[i], jointConfigs[i].rotationAxis);
                 }
             }
