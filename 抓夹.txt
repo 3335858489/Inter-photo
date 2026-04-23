@@ -1,72 +1,3 @@
-为了确保你今晚能彻底跑通，不再出现“碎一地”或者代码报错的情况，我为你整合了这套**最终版、匹配版、且带自动修复功能**的完整代码。
-
-请你严格按照以下步骤进行替换和操作。
-
----
-
-### 1. MATLAB 发送端：`RobotUDPSender.m`
-这个脚本解决了你刚才遇到的 `udpport` 报错，并采用了**极小角度（$\pm 15^\circ$）**的平滑正弦波。
-
-```matlab
-%% MATLAB 极速调试脚本 - 稳定版
-clc; clear; close all;
-
-% --- 1. 配置参数 ---
-DEST_IP = "127.0.0.1";
-DEST_PORT = 9050;
-DURATION = 20;      % 运行 20 秒
-FREQUENCY = 50;     % 50Hz 刷新率
-
-% --- 2. 端口初始化 (暴力清理模式) ---
-instrreset; % 清理所有残留端口
-
-try
-    u = udpport("IPv4");
-    disp('✅ MATLAB 端口就绪，准备发送平滑数据...');
-catch
-    error('❌ 端口创建失败，请手动在命令行输入 instrreset 并重试');
-end
-
-% --- 3. 循环发送数据 ---
-tic;
-while toc < DURATION
-    currTime = toc;
-    
-    % 生成小幅度平滑信号 (15度振幅，安全不碎)
-    amplitude = 15; 
-    phase = 0.5 * 2 * pi * currTime; % 每2秒一个周期
-    
-    q1 = amplitude * sin(phase);
-    q2 = amplitude * cos(phase);
-    q3 = amplitude * sin(phase * 0.5);
-    q4 = amplitude * cos(phase * 0.8);
-    q5 = 10 * sin(phase);
-    q6 = 5 * cos(phase);
-    
-    % 构造字符串：q1,q2,q3,q4,q5,q6
-    dataStr = sprintf('%.2f,%.2f,%.2f,%.2f,%.2f,%.2f', q1, q2, q3, q4, q5, q6);
-    
-    % 发送
-    write(u, dataStr, "string", DEST_IP, DEST_PORT);
-    
-    % 每 25 帧打印一次
-    if mod(floor(currTime * FREQUENCY), 25) == 0
-        fprintf('时刻 %.1fs 发送: [%s]\n', currTime, dataStr);
-    end
-    
-    pause(1/FREQUENCY); 
-end
-
-disp('✅ 演示结束。');
-clear u;
-```
-
----
-
-### 2. Unity 接收端：`UDPReceiver.cs`
-这个脚本会自动执行**“物理静默”**（删除所有物理组件）并使用 **`localRotation`**（局部旋转）来适配你的“套娃”层级。
-
-```csharp
 using UnityEngine;
 using System.Net;
 using System.Net.Sockets;
@@ -74,19 +5,27 @@ using System.Text;
 using System;
 using System.Threading;
 
+// 🚨 这一段结构体是让每个关节都有独立坐标轴的关键！
+[System.Serializable]
+public class RobotJointConfig
+{
+    [Header("拖入关节模型 (如 Joint1)")]
+    public Transform jointTransform;
+    
+    [Header("该关节的独立旋转轴 (X, Y, Z)")]
+    public Vector3 rotationAxis = new Vector3(0, 1, 0); 
+}
+
 public class UDPReceiver : MonoBehaviour
 {
     [Header("网络配置")]
     public int port = 9050;
-
-    [Header("按顺序拖入 Joint1 到 Joint6")]
-    public Transform[] joints = new Transform[6];
-
-    [Header("旋转轴设置")]
-    public Vector3 rotationAxis = Vector3.up; // 如果转动方向不对，请在界面改这个
-
+    
     [Header("平滑度 (0-1)")]
     public float smoothness = 0.3f;
+
+    [Header("【在这里独立配置 6 个关节】")]
+    public RobotJointConfig[] jointConfigs = new RobotJointConfig[6];
 
     private UdpClient udpClient;
     private Thread receiveThread;
@@ -96,30 +35,25 @@ public class UDPReceiver : MonoBehaviour
 
     void Start()
     {
-        // 1. 【暴力物理清除】防止碎裂飞散
-        // 自动禁用并删除所有的 Collider 和 Rigidbody
+        // 暴力清理物理组件，防止散架脱落
+        foreach (var rb in GetComponentsInChildren<Rigidbody>(true)) {
+            rb.isKinematic = true; 
+            Destroy(rb); 
+        }
         foreach (var c in GetComponentsInChildren<Collider>(true)) {
-            c.enabled = false;
             Destroy(c); 
         }
-        foreach (var rb in GetComponentsInChildren<Rigidbody>(true)) {
-            rb.isKinematic = true;
-            Destroy(rb);
-        }
 
-        // 2. 开启后台接收线程
         receiveThread = new Thread(ReceiveData);
         receiveThread.IsBackground = true;
         receiveThread.Start();
-        Debug.Log("<color=green>✅ 物理已静默。UDP 监听中...</color>");
     }
 
     private void ReceiveData()
     {
         udpClient = new UdpClient(port);
         IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
-        while (true)
-        {
+        while (true) {
             try {
                 byte[] data = udpClient.Receive(ref anyIP);
                 string text = Encoding.UTF8.GetString(data);
@@ -135,50 +69,22 @@ public class UDPReceiver : MonoBehaviour
 
     void Update()
     {
-        lock (lockObject)
-        {
-            for (int i = 0; i < 6; i++)
-            {
-                if (joints[i] != null)
-                {
-                    // 平滑过渡角度，防止突跳
+        lock (lockObject) {
+            for (int i = 0; i < 6; i++) {
+                if (i < jointConfigs.Length && jointConfigs[i].jointTransform != null) {
+                    
+                    // 加入平滑过渡
                     currentDisplayAngles[i] = Mathf.Lerp(currentDisplayAngles[i], targetAngles[i], smoothness);
                     
-                    // 核心：使用 localRotation，这样父级转动，子级才会跟着位移
-                    joints[i].localRotation = Quaternion.AngleAxis(currentDisplayAngles[i], rotationAxis);
+                    // 核心：分别使用各自设置的旋转轴进行旋转
+                    jointConfigs[i].jointTransform.localRotation = Quaternion.AngleAxis(currentDisplayAngles[i], jointConfigs[i].rotationAxis);
                 }
             }
         }
     }
 
-    void OnApplicationQuit()
-    {
-        if (receiveThread != null) receiveThread.Abort();
+    void OnApplicationQuit() {
         if (udpClient != null) udpClient.Close();
+        if (receiveThread != null) receiveThread.Abort();
     }
 }
-```
-
----
-
-### 3. 落地最后的 Checklist (必须完成)
-
-为了不让你的机械臂再“狂舞”或“肢解”，请务必确认以下三点：
-
-1.  **“套娃”层级（最重要）**：
-    在 Unity 的 `Hierarchy` 窗口中，你的结构必须是递归的：
-    `base_link` > `Joint1` > `link1` > `Joint2` > `link2` ... 每一个关节必须是上一个关节的子物体。
-2.  **拖拽顺序**：
-    点击挂载了脚本的物体（比如 `Robot_Base`），在 `Joints` 数组里，**按照从 1 到 6 的顺序**，把左边的关节物体拖进去。
-3.  **确定旋转轴**：
-    如果在 MATLAB 运行时，机械臂不是“左右摆”而是“自转”或者“上下翻”，请在 Unity 界面上修改 `Rotation Axis` 的数值：
-    * 绕 Y 轴转（通常是左右）：`X:0, Y:1, Z:0`
-    * 绕 X 轴转（通常是前后）：`X:1, Y:0, Z:0`
-    * 绕 Z 轴转（通常是自旋）：`X:0, Y:0, Z:1`
-
-
-
-**现在开始：**
-先运行 Unity 播放，观察控制台是否显示“物理已静默”。如果机械臂站得很稳，再去运行那个 MATLAB 脚本。
-
-祝你今晚看到它动起来！如果你发现某个关节转动的轴向不对，直接在 Unity 界面改那个 `Rotation Axis` 即可，不需要改代码。加油！
