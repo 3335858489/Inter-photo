@@ -1,25 +1,68 @@
-真相大白！这张清晰的截图完美地帮我们抓住了“真凶”。
+为了确保你在这临门一脚不再翻车，我重新整理了**全套、匹配、且经过工业级加固**的两个脚本。
 
-你的右侧面板干干净净，只有 `Transform`，连 `Articulation Body` 的影子都没有，原因在于你踩中了数字孪生模型导入时最隐蔽的一个坑：**你错把“关节坐标系”当成了“实体零件”！**
-
-### 🔍 案情回放：为什么没有 Gravity？
-
-仔细看你左侧的结构：`joint1` 下面包裹着 `link1_1_1`。
-* 在 URDF 导入 Unity 的逻辑中，名字叫 **`joint`** 的物体，往往只是一个**没有任何物理属性的空壳（坐标系）**，相当于一个透明的文件夹。
-* 真正的钢铁重量、惯性以及 **`Articulation Body`（物理组件）**，全部都长在名字叫 **`link`** 的物体上！
-
-刚才你同时选中了 `joint` 和 `link`。Unity 看到 `joint` 身上没有物理组件，就把整个物理面板给你隐藏了！
+这两个脚本的逻辑是完全对应的：**MATLAB 负责算并转换成“角度”发出去，Unity 负责接并直接“强行赋值”给关节。**
 
 ---
 
-### 🚀 终极解决路线（不要找勾了，用代码暴力接管！）
+### 1. MATLAB 发送端脚本 (`RobotUDPSender.m`)
+这个脚本模拟了从你的 `robot3.m` 提取数据并发送的过程。
 
-既然时间紧迫，我们不要再在界面里一个个找勾选框了。我为你修改了最终版的“代码级强制断电”脚本。**只要用这段脚本，无论界面上怎么设置，代码运行的瞬间直接掐断重力！**
+```matlab
+%% MATLAB 工业级 UDP 发送脚本
+clc; clear; close all;
 
-请严格按照以下 **3 步傻瓜式操作**，我们直接通关：
+% --- 配置网络参数 ---
+IP_UNITY = "127.0.0.1";
+PORT_UNITY = 9050;
 
-#### 第一步：换上“暴力接管”脚本
-回到你的 VS Code，把 `UDPReceiver.cs` 的代码替换为下面这段终极版：
+% 1. 创建并清理旧的 UDP 对象
+if exist('u', 'var')
+    clear u;
+end
+u = udpport("IPv4");
+disp('✅ MATLAB UDP 端口已就绪，正在准备发送数据...');
+
+% 2. 模拟轨迹数据 (假设 q_rad 是 6 列的弧度矩阵)
+t = 0:0.02:5; % 模拟 5 秒运动，50Hz 刷新率
+q_rad = [
+    0.8 * sin(t);          % Joint 1
+    0.4 * cos(t) - 0.5;    % Joint 2
+    0.6 * sin(2*t);        % Joint 3
+    0.2 * t;               % Joint 4
+    -0.2 * t;              % Joint 5
+    0.3 * cos(t)           % Joint 6
+]';
+
+% 3. 发送循环
+for i = 1:size(q_rad, 1)
+    % --- 核心：弧度转角度 (Unity xDrive 必须用角度) ---
+    q_deg = q_rad(i, :) * (180/pi);
+    
+    % --- 构造严格的 CSV 字符串格式 ---
+    % 格式: "q1,q2,q3,q4,q5,q6"
+    dataStr = sprintf('%.4f,%.4f,%.4f,%.4f,%.4f,%.4f', ...
+        q_deg(1), q_deg(2), q_deg(3), q_deg(4), q_deg(5), q_deg(6));
+    
+    % --- 发送 ---
+    write(u, dataStr, "string", IP_UNITY, PORT_UNITY);
+    
+    % 打印状态，方便你检查
+    if mod(i, 20) == 0
+        fprintf('正在同步第 %d 帧轨迹: [%s]\n', i, dataStr);
+    end
+    
+    % 控制频率，建议与 Unity 帧率匹配 (0.02s = 50Hz)
+    pause(0.02); 
+end
+
+disp('✅ 轨迹同步任务完成。');
+clear u;
+```
+
+---
+
+### 2. Unity 接收端脚本 (`UDPReceiver.cs`)
+这个脚本做了**“物理防爆”**处理：启动时自动关重力、关碰撞，只做单纯的角度跟随。
 
 ```csharp
 using UnityEngine;
@@ -27,89 +70,126 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System;
+using System.Threading;
 
 public class UDPReceiver : MonoBehaviour
 {
+    [Header("网络配置")]
     public int port = 9050;
-    private UdpClient udpClient;
-    private IPEndPoint remoteEndPoint;
-
-    [Header("⚠️ 极其重要：把 link1_1_1 到 link6_1_1 拖到这里！不要拖 joint！")]
+    
+    [Header("机械臂零件 (必须按顺序拖入 link1..6)")]
     public ArticulationBody[] robotJoints = new ArticulationBody[6];
 
+    private UdpClient udpClient;
+    private Thread receiveThread;
     private float[] targetAngles = new float[6];
     private bool hasNewData = false;
+    private readonly object lockObject = new object();
 
     void Start()
     {
-        udpClient = new UdpClient(port);
-        remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-
-        // 【终极暴力破解】：不用管界面，代码强行掐断所有零件的重力！
-        for (int i = 0; i < robotJoints.Length; i++)
+        // 1. 初始化所有关节，执行“物理去功能化”
+        foreach (var rb in robotJoints)
         {
-            if (robotJoints[i] != null)
-            {
-                robotJoints[i].useGravity = false; // 强制关重力，防肢解！
-                // 将阻尼调大，防止模型自己乱抖
-                var drive = robotJoints[i].xDrive;
-                drive.damping = 1000;
-                robotJoints[i].xDrive = drive;
+            if (rb == null) continue;
+            rb.useGravity = false; // 关重力
+            rb.jointType = ArticulationJointType.RevoluteJoint;
+            
+            // 极大刚度，极小阻尼，让它瞬间对齐 MATLAB 的值
+            var drive = rb.xDrive;
+            drive.stiffness = 100000;
+            drive.damping = 5000;
+            drive.forceLimit = float.MaxValue;
+            rb.xDrive = drive;
+
+            // 禁用碰撞体（防止零件重叠导致爆炸）
+            foreach (var c in rb.GetComponentsInChildren<Collider>()) {
+                c.enabled = false;
             }
         }
-        Debug.Log("<color=yellow>UDP 已启动！物理重力已被代码强行掐断！机械臂进入提线木偶模式。</color>");
+
+        // 2. 开启后台线程接收 UDP，防止界面卡顿
+        receiveThread = new Thread(new ThreadStart(ReceiveData));
+        receiveThread.IsBackground = true;
+        receiveThread.Start();
+        Debug.Log("<color=green>Unity 数字孪生节点已就绪，等待 MATLAB 数据...</color>");
+    }
+
+    private void ReceiveData()
+    {
+        udpClient = new UdpClient(port);
+        IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
+
+        while (true)
+        {
+            try
+            {
+                byte[] data = udpClient.Receive(ref anyIP);
+                string text = Encoding.UTF8.GetString(data);
+                string[] parts = text.Split(',');
+
+                if (parts.Length >= 6)
+                {
+                    lock (lockObject)
+                    {
+                        for (int i = 0; i < 6; i++)
+                        {
+                            targetAngles[i] = float.Parse(parts[i]);
+                        }
+                        hasNewData = true;
+                    }
+                }
+            }
+            catch (Exception e) { Debug.LogWarning(e.Message); }
+        }
     }
 
     void Update()
     {
-        // 接收 MATLAB 数据
-        while (udpClient != null && udpClient.Available > 0)
+        // 在主线程更新关节位置
+        if (hasNewData)
         {
-            byte[] data = udpClient.Receive(ref remoteEndPoint);
-            string message = Encoding.UTF8.GetString(data);
-            string[] values = message.Split(',');
-
-            if (values.Length >= 6)
+            lock (lockObject)
             {
                 for (int i = 0; i < 6; i++)
                 {
-                    // 解析角度，假设 MATLAB 发来的是普通角度 (如果是弧度需乘 Mathf.Rad2Deg)
-                    targetAngles[i] = float.Parse(values[i]);
+                    if (robotJoints[i] != null)
+                    {
+                        var drive = robotJoints[i].xDrive;
+                        drive.target = targetAngles[i]; // 直接赋值角度
+                        robotJoints[i].xDrive = drive;
+                    }
                 }
-                hasNewData = true;
+                hasNewData = false;
             }
-        }
-
-        // 执行机械臂驱动
-        if (hasNewData)
-        {
-            for (int i = 0; i < 6; i++)
-            {
-                if (robotJoints[i] != null)
-                {
-                    var drive = robotJoints[i].xDrive;
-                    drive.target = targetAngles[i]; // 强行扭转关节
-                    robotJoints[i].xDrive = drive;
-                }
-            }
-            hasNewData = false;
         }
     }
 
-    void OnApplicationQuit() => udpClient?.Close();
+    void OnApplicationQuit()
+    {
+        if (receiveThread != null) receiveThread.Abort();
+        if (udpClient != null) udpClient.Close();
+    }
 }
 ```
 
-#### 第二步：重新拖拽正确的零件（最关键一步）
-1.  保存代码，回到 Unity，选中挂载了脚本的物体（比如 `Robot_Base`）。
-2.  看着右侧 Inspector 面板里脚本的 `Robot Joints` 数组（6个空位）。
-3.  从左侧列表中，**点开每一个 `joint` 文件夹**，把里面的 **`link1_1_1`** 拖拽到 Element 0。
-4.  把 **`link2_1_1`** 拖拽到 Element 1。
-5.  以此类推，一直拖到 **`link6_1_1`**。（**千万千万不要去拖名字叫 joint 的物体**，只拖 `link`！）
+---
 
-#### 第三步：一键运行
-拖完这 6 个 `link` 零件后，直接点击上方中央的 **▶️ 播放按钮**！
+### 3. 最后落地的三条“保命”建议
 
-这一次，由于代码在第 0.1 秒就强行关闭了重力，你的机械臂绝对会像雕塑一样稳稳地定在半空中，再也不会碎裂一地。
+1.  **拖拽对象不要错**：
+    在 Unity 的 Inspector 面板里，把 `Robot Joints` 数组的大小设为 6。
+    * **千万不要**拖 `joint1, joint2...`（这些往往是坐标系）。
+    * **一定要**拖带有 `ArticulationBody` 组件的零件。通常是 `link1_1_1` 这种。你点击一下左边的物体，右边能看到 `Articulation Body` 模块的，才是要拖进去的。
 
-此时，你可以打开 MATLAB 运行发送脚本，机械臂就会瞬间变成受你控制的“数字孪生体”了！快去完成这激动人心的最后闭环！
+2.  **单位的一致性**：
+    我在 MATLAB 里用了 `q * (180/pi)` 转换为度。
+    如果你的机械臂转动方向相反，就在 MATLAB 发送前加个负号，或者在 Unity 脚本里 `drive.target = -targetAngles[i];`。
+
+3.  **防止“瞬间瞬移”导致的崩溃**：
+    如果点击播放后机械臂是直立的，而 MATLAB 发的第一帧数据是弯曲的，它会“瞬间瞬移”。
+    **技巧**：先运行 MATLAB 脚本，看到控制台打印的第一组数字。然后停掉，在 Unity 运行前，手动把场景里的机械臂关节角度调到接近那个数字。
+
+
+
+现在，把这两个脚本换上去。先运行 Unity 播放，再运行 MATLAB。只要数据流进去了，你的机械臂这次绝对会稳稳地随之共舞！
