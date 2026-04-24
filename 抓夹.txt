@@ -1,31 +1,35 @@
+这是在黎明前最后的黑暗了！你刚才描述的现象（“一开始有绿字，运行 MATLAB 后绿字突然消失，且机械臂不动”）提供了一个**极其关键的破案线索**。
+
+在 Unity 中，界面最底部的状态栏**只会显示最后一条信息**。绿字突然“消失”，只有一种可能：**当 MATLAB 的数据发过来时，Unity 内部触发了一条新的信息（通常是报错），把绿字给顶掉了！**
+
+为了查出到底是被防火墙拦截了、数据格式错了、还是模型没拖对，我给你准备了这个**“自带测谎仪”的终极通讯脚本**。它会把所有的隐形错误全部打印出来。
+
+### 🚀 第一步：换上“测谎仪”脚本
+
+请再次双击打开 `UDPReceiver.cs`，全选删除，把下面这段带了**精准错误拦截**和**接收反馈**的代码贴进去，保存。
+
+```csharp
 using UnityEngine;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System;
 using System.Threading;
+using System.Globalization;
 
-// 1. 结构体定义：必须放在最外面，这是让每个关节都有独立坐标轴的关键！
 [System.Serializable]
 public class RobotJointConfig
 {
-    [Header("拖入关节模型 (如 Joint1)")]
+    [Header("必须把左边的 joint 拖进这里！")]
     public Transform jointTransform;
-    
-    [Header("该关节的独立旋转轴 (X, Y, Z)")]
+    [Header("旋转轴")]
     public Vector3 rotationAxis = new Vector3(0, 1, 0); 
 }
 
-// 2. 主控脚本类
 public class UDPReceiver : MonoBehaviour
 {
-    [Header("网络配置")]
     public int port = 9050;
-    
-    [Header("动作平滑度 (0-1，越小越柔和)")]
     public float smoothness = 0.3f;
-
-    [Header("【六轴独立配置阵列】(展开并把 Size 改为 6)")]
     public RobotJointConfig[] jointConfigs = new RobotJointConfig[6];
 
     private UdpClient udpClient;
@@ -33,25 +37,20 @@ public class UDPReceiver : MonoBehaviour
     private float[] targetAngles = new float[6];
     private float[] currentDisplayAngles = new float[6];
     private readonly object lockObject = new object();
+    
+    // 用于测谎的状态标记
+    private bool hasReceivedFirstData = false; 
 
     void Start()
     {
-        // --- 暴力清理物理组件（防散架核心） ---
-        foreach (var rb in GetComponentsInChildren<Rigidbody>(true)) {
-            rb.isKinematic = true; 
-            Destroy(rb); 
-        }
-        foreach (var c in GetComponentsInChildren<Collider>(true)) {
-            Destroy(c); 
-        }
+        foreach (var rb in GetComponentsInChildren<Rigidbody>(true)) { rb.isKinematic = true; Destroy(rb); }
+        foreach (var c in GetComponentsInChildren<Collider>(true)) { Destroy(c); }
 
-        // --- 启动 UDP 接收线程 ---
         receiveThread = new Thread(ReceiveData);
         receiveThread.IsBackground = true;
         receiveThread.Start();
         
-        // --- 控制台成功提示（你期待的绿色字样） ---
-        Debug.Log("<color=green>✅ 完美套娃！六轴独立坐标系已就绪，物理引擎已安全卸载，等待 MATLAB 数据...</color>");
+        Debug.Log("<color=green>✅ [系统就绪] 等待 MATLAB 传输...</color>");
     }
 
     private void ReceiveData()
@@ -62,13 +61,27 @@ public class UDPReceiver : MonoBehaviour
             try {
                 byte[] data = udpClient.Receive(ref anyIP);
                 string text = Encoding.UTF8.GetString(data);
+                
+                // 【测谎仪核心】只要收到任何数据，立刻在控制台播报
+                if (!hasReceivedFirstData) {
+                    Debug.Log("<color=cyan>📡 [通讯成功] 已收到第一帧数据: " + text + "</color>");
+                    hasReceivedFirstData = true;
+                }
+
                 string[] parts = text.Split(',');
                 if (parts.Length >= 6) {
                     lock (lockObject) {
-                        for (int i = 0; i < 6; i++) targetAngles[i] = float.Parse(parts[i]);
+                        for (int i = 0; i < 6; i++) {
+                            // 强制使用国际标准解析（防止中文 Windows 系统的逗号小数点冲突）
+                            targetAngles[i] = float.Parse(parts[i], CultureInfo.InvariantCulture);
+                        }
                     }
                 }
-            } catch { }
+            } 
+            catch (Exception e) {
+                // 如果解析报错，直接打印出红字！
+                Debug.LogError("❌ [UDP 接收报错]: " + e.Message);
+            }
         }
     }
 
@@ -76,15 +89,14 @@ public class UDPReceiver : MonoBehaviour
     {
         lock (lockObject) {
             for (int i = 0; i < 6; i++) {
-                // 确保数组不越界，且你已经在界面上拖入了物体
-                if (i < jointConfigs.Length && jointConfigs[i] != null && jointConfigs[i].jointTransform != null) {
-                    
-                    // 平滑插值计算当前角度
-                    currentDisplayAngles[i] = Mathf.Lerp(currentDisplayAngles[i], targetAngles[i], smoothness);
-                    
-                    // 核心驱动：使用局部坐标系 (localRotation) 结合该关节专属的旋转轴 (rotationAxis)
-                    jointConfigs[i].jointTransform.localRotation = Quaternion.AngleAxis(currentDisplayAngles[i], jointConfigs[i].rotationAxis);
+                // 严密检查：是否漏拖了模型？
+                if (jointConfigs[i].jointTransform == null) {
+                    if (hasReceivedFirstData) Debug.LogWarning($"⚠️ 第 {i+1} 个关节没有拖入模型对象！");
+                    continue;
                 }
+
+                currentDisplayAngles[i] = Mathf.Lerp(currentDisplayAngles[i], targetAngles[i], smoothness);
+                jointConfigs[i].jointTransform.localRotation = Quaternion.AngleAxis(currentDisplayAngles[i], jointConfigs[i].rotationAxis);
             }
         }
     }
@@ -94,3 +106,33 @@ public class UDPReceiver : MonoBehaviour
         if (receiveThread != null) receiveThread.Abort();
     }
 }
+```
+
+---
+
+### 🔍 第二步：打开真正的“控制台”（极其重要）
+
+你之前只看了界面最底部的状态栏，那里藏不住秘密。
+在 Unity 顶部菜单栏点击：**`Window` -> `General` -> `Console`**（或者按快捷键 `Ctrl + Shift + C`）。
+把这个窗口拖到屏幕下方，确保它右上角的三个小图标（气泡、黄色感叹号、红色叉叉）都是**按下去的高亮状态**。
+
+---
+
+### 🚀 第三步：运行并“看诊”
+
+配置好 6 个轴向，点击 Unity 的 **▶️ 播放**。
+运行 MATLAB 代码。死死盯住你刚打开的 **Console（控制台）** 窗口！
+
+**真相即将大白（请对号入座）：**
+
+* **情况 A：出现了蓝色的 `📡 [通讯成功] 已收到第一帧数据...`，并伴随黄色的 `⚠️ 关节没有拖入模型对象！`**
+  * **病因**：网络是通的！你只是在刚才配置 `Size: 6` 和 XYZ 坐标时，**忘记把左侧的 `joint` 零件拖进 `Joint Transform` 的槽位里了**。它们现在显示的是 `None (Transform)`。
+  * **解法**：停止运行，把模型一个一个拖进去。
+* **情况 B：出现了红色的 `❌ [UDP 接收报错]`**
+  * **病因**：MATLAB 发的数据格式不对，或者是 Windows 的防火墙截断了字符。
+  * **解法**：把这行红字截图发给我。
+* **情况 C：控制台死寂，只有绿字，连蓝色字都没弹出来**
+  * **病因**：你的 Windows Defender 防火墙拦截了 UDP 9050 端口，Unity 完全是个“瞎子”。
+  * **解法**：暂时关闭一下 Windows 防火墙（特别是专用网络和公用网络的防火墙），然后再试一次。
+
+去打开真正的 Console 面板试一次，是 A、B 还是 C？我们马上就能让它动起来！
