@@ -19,7 +19,7 @@ public class RobotJointConfig
 }
 
 // ==========================================
-// 2. UDP 接收与孪生主控脚本
+// 2. 终极 UDP 接收与孪生主控脚本
 // ==========================================
 public class UDPReceiver : MonoBehaviour
 {
@@ -29,7 +29,7 @@ public class UDPReceiver : MonoBehaviour
     [Header("动作平滑度 (0-1，越小越柔和)")]
     public float smoothness = 0.3f;
 
-    [Header("【在这里配置 6 个关节】(Size改6)")]
+    [Header("【在这里配置 6 个关节】(Size必须为6)")]
     public RobotJointConfig[] jointConfigs = new RobotJointConfig[6];
 
     private UdpClient udpClient;
@@ -61,49 +61,72 @@ public class UDPReceiver : MonoBehaviour
     };
     // ============================================================
 
-    // 🌟 神奇魔法按钮：在 Unity 编辑器里不运行也能一键拼装！
+    // 🌟 神奇魔法按钮：在 Unity 编辑器里一键拼装并带精准报错！
     [ContextMenu("⚡ 一键自动装配坐标 (点我)")]
     public void AutoAssemble()
     {
-        for (int i = 0; i < 6; i++) {
-            if (jointConfigs[i] != null && jointConfigs[i].jointTransform != null) {
-                Transform currentJoint = jointConfigs[i].jointTransform;
-                
-                // 强制赋予 Joint 坐标
-                currentJoint.localPosition = fixedJointPositions[i];
+        bool isPerfect = true;
+        
+        if (jointConfigs == null || jointConfigs.Length < 6) {
+            Debug.LogError("❌ [装配失败] 数组长度不够！请把 Joint Configs 的 Size 改为 6！");
+            return;
+        }
 
-                // 智能寻找它下面的 Link 并赋予补偿坐标
-                foreach (Transform child in currentJoint) {
-                    if (child.name.ToLower().Contains("link")) {
-                        child.localPosition = fixedLinkPositions[i];
-                        break; 
-                    }
+        for (int i = 0; i < 6; i++) {
+            if (jointConfigs[i] == null || jointConfigs[i].jointTransform == null) {
+                Debug.LogWarning($"⚠️ [装配警告] 槽位 {i} 是空的！请把左侧对应的 joint 拖进去！");
+                isPerfect = false;
+                continue;
+            }
+
+            Transform currentJoint = jointConfigs[i].jointTransform;
+            currentJoint.localPosition = fixedJointPositions[i]; // 强制写骨架坐标
+
+            bool foundLink = false;
+            foreach (Transform child in currentJoint) {
+                if (child.name.ToLower().Contains("link")) {
+                    child.localPosition = fixedLinkPositions[i]; // 强制写皮肉坐标
+                    foundLink = true;
+                    break; 
                 }
             }
+            
+            if (!foundLink) {
+                Debug.LogWarning($"⚠️ [装配警告] 在 {currentJoint.name} 里面没找到名字带 'link' 的皮肉模型！");
+                isPerfect = false;
+            }
         }
-        Debug.Log("<color=yellow>🛠️ [坐标注入] 骨架与外壳已在编辑器中拼装完毕！</color>");
+
+        if (isPerfect) {
+            Debug.Log("<color=yellow>🛠️ [坐标注入] 完美！6 个关节的骨架与外壳已严丝合缝拼装完毕！</color>");
+        }
     }
 
     void Start()
     {
-        // 1. 暴力清理所有物理组件（彻底杜绝散架、鬼畜、乱弹）
+        // 1. 暴力清理所有物理组件（彻底杜绝散架、鬼畜）
         foreach (var rb in GetComponentsInChildren<Rigidbody>(true)) { rb.isKinematic = true; Destroy(rb); }
         foreach (var c in GetComponentsInChildren<Collider>(true)) { Destroy(c); }
         foreach (var ab in GetComponentsInChildren<ArticulationBody>(true)) { Destroy(ab); }
 
-        // 2. 运行瞬间再执行一次装配，当做双重保险
+        // 2. 运行瞬间再静默执行一次装配，当做双重保险
         AutoAssemble(); 
 
         // 3. 启动 UDP 监听线程
         receiveThread = new Thread(ReceiveData);
         receiveThread.IsBackground = true;
         receiveThread.Start();
-        Debug.Log("<color=green>✅ [系统就绪] 物理引擎已卸载，等待 MATLAB 传输...</color>");
+        
+        Debug.Log("<color=green>✅ [系统就绪] 端口复用已开启，物理引擎已卸载，等待 MATLAB 传输...</color>");
     }
 
     private void ReceiveData()
     {
-        udpClient = new UdpClient(port);
+        // 🚨 解决“只能跑一次”的核心：允许端口强行复用
+        udpClient = new UdpClient();
+        udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, port));
+
         IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
         while (true) {
             try {
@@ -119,11 +142,14 @@ public class UDPReceiver : MonoBehaviour
                 if (parts.Length >= 6) {
                     lock (lockObject) {
                         for (int i = 0; i < 6; i++) {
-                            // 强制使用标准解析，防止中英文系统标点冲突
+                            // 强制标准解析，防止系统语言导致的标点符号崩溃
                             targetAngles[i] = float.Parse(parts[i], CultureInfo.InvariantCulture);
                         }
                     }
                 }
+            } catch (SocketException) {
+                // 当我们在 OnDestroy 强行关闭端口时，会触发此错误，直接退出循环即可
+                break; 
             } catch (Exception e) {
                 Debug.LogError("❌ [UDP 接收报错]: " + e.Message);
             }
@@ -138,15 +164,22 @@ public class UDPReceiver : MonoBehaviour
                     // 平滑插值计算
                     currentDisplayAngles[i] = Mathf.Lerp(currentDisplayAngles[i], targetAngles[i], smoothness);
                     
-                    // 局部坐标系旋转驱动
+                    // 局部坐标系独立旋转驱动
                     jointConfigs[i].jointTransform.localRotation = Quaternion.AngleAxis(currentDisplayAngles[i], jointConfigs[i].rotationAxis);
                 }
             }
         }
     }
 
-    void OnApplicationQuit() {
-        if (udpClient != null) udpClient.Close();
-        if (receiveThread != null) receiveThread.Abort();
+    // 🚨 解决“只能跑一次”的终极杀招：精准猎杀残留线程
+    void OnDestroy() 
+    {
+        if (udpClient != null) {
+            udpClient.Close(); // 强行关闭端口
+        }
+        if (receiveThread != null && receiveThread.IsAlive) {
+            receiveThread.Abort(); // 强行猎杀线程
+        }
+        Debug.Log("<color=orange>🛑 [系统清理] 运行停止，UDP 端口 9050 已完美释放，可随时再次 Play。</color>");
     }
 }
