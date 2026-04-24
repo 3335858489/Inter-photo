@@ -1,3 +1,17 @@
+太棒了！引入**“绝对安全锁（软限位）”**是数字孪生走向成熟的标志。
+
+针对你提到的**“防止穿模”**和**“传送带约束”**，最完美的解决方案就是在解析 MATLAB 数据时，加上一道**不可逾越的数学钳制（Mathf.Clamp）**。
+
+* **对于防止穿模**：根据机械臂的物理结构，限制每个关节的最大弯曲角度（比如只能在 -150° 到 150° 之间）。
+* **对于传送带约束**：如果机械臂的下方或侧边有传送带，我们可以通过缩小某个关节的下限（例如把 Min Angle 设置为 -10°，而不是 -180°），让它在数字世界里**绝对无法“低头”砸穿传送带**。
+
+这是为你量身定制的**“带绝对安全锁”的满血版代码**。
+
+### 🚀 终极带锁版完整代码 (UDPReceiver.cs)
+
+请全选你现在的代码，替换为以下代码并保存（保留了你之前所有的完美配置，如一键装配、端口复用等）：
+
+```csharp
 using UnityEngine;
 using System.Net;
 using System.Net.Sockets;
@@ -6,17 +20,36 @@ using System;
 using System.Threading;
 using System.Globalization;
 
+// ==========================================
+// 1. 关节独立配置类（带绝对安全锁）
+// ==========================================
 [System.Serializable]
 public class RobotJointConfig
 {
+    [Header("拖入左侧的 joint (如 joint1)")]
     public Transform jointTransform;
+    
+    [Header("旋转轴 (填 1 或 -1)")]
     public Vector3 rotationAxis = new Vector3(0, 1, 0); 
+
+    [Header("【绝对安全锁】防穿模/传送带约束 (度)")]
+    [Tooltip("根据 URDF 或现场环境设置，防止砸中传送带或自身穿模")]
+    public float minAngle = -180f; 
+    public float maxAngle = 180f;  
 }
 
+// ==========================================
+// 2. 终极 UDP 接收与孪生主控脚本
+// ==========================================
 public class UDPReceiver : MonoBehaviour
 {
+    [Header("网络配置")]
     public int port = 9050;
+    
+    [Header("动作平滑度 (0-1，越小越柔和)")]
     public float smoothness = 0.3f;
+
+    [Header("【在这里配置 6 个关节】(Size必须为6)")]
     public RobotJointConfig[] jointConfigs = new RobotJointConfig[6];
 
     private UdpClient udpClient;
@@ -26,12 +59,56 @@ public class UDPReceiver : MonoBehaviour
     private readonly object lockObject = new object();
     private bool hasReceivedFirstData = false; 
 
+    // ==================== URDF 坐标强行写入区 ====================
+    private readonly Vector3[] fixedJointPositions = new Vector3[] {
+        new Vector3(-0.019225f, -0.000523f, 0.100684f), // Joint1
+        new Vector3(-0.0155f, 0.035f, 0.0285f),         // Joint2
+        new Vector3(0.03665f, 0f, 0.146f),              // Joint3
+        new Vector3(-0.01855f, -0.01f, 0.052f),         // Joint4
+        new Vector3(0.0168f, 0.127f, 0f),               // Joint5
+        new Vector3(-0.018506f, 0.077f, -0.000106f)     // Joint6
+    };
+
+    private readonly Vector3[] fixedLinkPositions = new Vector3[] {
+        new Vector3(0.019225f, 0.000523f, -0.100684f),  // Link1
+        new Vector3(0.034725f, -0.034477f, -0.129184f), // Link2
+        new Vector3(-0.001925f, -0.034477f, -0.275184f),// Link3
+        new Vector3(0.016625f, -0.024477f, -0.327184f), // Link4
+        new Vector3(-0.000175f, -0.151477f, -0.327184f),// Link5
+        new Vector3(0.018331f, -0.228477f, -0.327078f)  // Link6
+    };
+    // ============================================================
+
+    [ContextMenu("⚡ 一键自动装配坐标 (点我)")]
+    public void AutoAssemble()
+    {
+        bool isPerfect = true;
+        if (jointConfigs == null || jointConfigs.Length < 6) return;
+
+        for (int i = 0; i < 6; i++) {
+            if (jointConfigs[i] == null || jointConfigs[i].jointTransform == null) continue;
+
+            Transform currentJoint = jointConfigs[i].jointTransform;
+            currentJoint.localPosition = fixedJointPositions[i]; 
+
+            foreach (Transform child in currentJoint) {
+                if (child.name.ToLower().Contains("link")) {
+                    child.localPosition = fixedLinkPositions[i]; 
+                    break; 
+                }
+            }
+        }
+        Debug.Log("<color=yellow>🛠️ [坐标注入] 骨架与外壳已严丝合缝拼装完毕！</color>");
+    }
+
     void Start()
     {
-        // 暴力防散架
+        // 暴力卸载物理引擎，杜绝原生物理系统的干扰
         foreach (var rb in GetComponentsInChildren<Rigidbody>(true)) { rb.isKinematic = true; Destroy(rb); }
         foreach (var c in GetComponentsInChildren<Collider>(true)) { Destroy(c); }
         foreach (var ab in GetComponentsInChildren<ArticulationBody>(true)) { Destroy(ab); }
+
+        AutoAssemble(); 
 
         receiveThread = new Thread(ReceiveData);
         receiveThread.IsBackground = true;
@@ -43,18 +120,38 @@ public class UDPReceiver : MonoBehaviour
         udpClient = new UdpClient();
         udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, port));
+
         IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
-        
         while (true) {
             try {
                 byte[] data = udpClient.Receive(ref anyIP);
-                string[] parts = Encoding.UTF8.GetString(data).Split(',');
+                string text = Encoding.UTF8.GetString(data);
+                
+                if (!hasReceivedFirstData) {
+                    Debug.Log("<color=cyan>📡 [通讯成功] 已收到第一帧数据: " + text + "</color>");
+                    hasReceivedFirstData = true;
+                }
+
+                string[] parts = text.Split(',');
                 if (parts.Length >= 6) {
                     lock (lockObject) {
-                        for (int i = 0; i < 6; i++) targetAngles[i] = float.Parse(parts[i], CultureInfo.InvariantCulture);
+                        for (int i = 0; i < 6; i++) {
+                            // 1. 先解析出 MATLAB 发来的原始角度
+                            float rawAngle = float.Parse(parts[i], CultureInfo.InvariantCulture);
+                            
+                            // 2. 🚨【绝对安全锁生效】强行将角度钳制在你的设定范围内！
+                            // 即使 MATLAB 算错了发来 999 度，也会被死死锁在 maxAngle。
+                            targetAngles[i] = Mathf.Clamp(rawAngle, jointConfigs[i].minAngle, jointConfigs[i].maxAngle);
+                        }
                     }
                 }
-            } catch (SocketException) { break; } catch { }
+            } catch (SocketException) {
+                break; 
+            } catch (ThreadAbortException) {
+                // 安静地结束线程，不弹红字
+            } catch (Exception e) {
+                Debug.LogError("❌ [UDP 接收报错]: " + e.Message);
+            }
         }
     }
 
@@ -70,8 +167,23 @@ public class UDPReceiver : MonoBehaviour
         }
     }
 
-    void OnDestroy() {
-        if (udpClient != null) udpClient.Close();
-        if (receiveThread != null && receiveThread.IsAlive) receiveThread.Abort();
+    void OnDestroy() 
+    {
+        if (udpClient != null) udpClient.Close(); 
+        if (receiveThread != null && receiveThread.IsAlive) receiveThread.Abort(); 
+        Debug.Log("<color=orange>🛑 [系统清理] 运行停止，UDP 端口已完美释放。</color>");
     }
 }
+```
+
+### 🛡️ 如何在面板里设置“传送带防撞”约束？
+
+保存代码切回 Unity 后，展开 `Joint Configs`，你会发现每个关节都多了两个框：**`Min Angle`** 和 **`Max Angle`**。
+
+1.  **对于常规关节（防穿模）：**
+    参考你 URDF 里的 `<limit lower="-3.14" upper="3.14" />`，将 `Min` 设为 **-180**，`Max` 设为 **180**。这保证了关节不会像麻花一样无限旋转。
+2.  **对于会被“传送带”卡住的关节（防碰撞）：**
+    假设 `Joint 2` 往下转超过 30度 就会砸穿传送带，你只需要直接把 `Joint 2` 的 **`Max Angle`** 修改为 **30**（具体正负取决于你的坐标轴）。
+    这样一来，不论 MATLAB 端发生怎样的逻辑暴走，只要数字传到 Unity，它就像碰到了一堵隐形的绝对叹息之墙，**死也不会越过 30 度！**
+
+快去面板里给那些危险的关节设置好上限和下限吧！有了这道锁，你就再也不用担心演示时发生“灾难性穿模事故”了。
