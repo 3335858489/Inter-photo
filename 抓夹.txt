@@ -6,30 +6,17 @@ using System;
 using System.Threading;
 using System.Globalization;
 
-// ==========================================
-// 1. 关节独立配置类（生成面板槽位）
-// ==========================================
 [System.Serializable]
 public class RobotJointConfig
 {
-    [Header("拖入左侧的 joint (如 joint1)")]
     public Transform jointTransform;
-    [Header("旋转轴 (填 1 或 -1)")]
     public Vector3 rotationAxis = new Vector3(0, 1, 0); 
 }
 
-// ==========================================
-// 2. 终极 UDP 接收与孪生主控脚本
-// ==========================================
 public class UDPReceiver : MonoBehaviour
 {
-    [Header("网络配置")]
     public int port = 9050;
-    
-    [Header("动作平滑度 (0-1，越小越柔和)")]
     public float smoothness = 0.3f;
-
-    [Header("【在这里配置 6 个关节】(Size必须为6)")]
     public RobotJointConfig[] jointConfigs = new RobotJointConfig[6];
 
     private UdpClient udpClient;
@@ -39,120 +26,35 @@ public class UDPReceiver : MonoBehaviour
     private readonly object lockObject = new object();
     private bool hasReceivedFirstData = false; 
 
-    // ==================== URDF 坐标强行写入区 ====================
-    // 从 URDF 提取的精确骨架坐标 (Joint Local Position)
-    private readonly Vector3[] fixedJointPositions = new Vector3[] {
-        new Vector3(-0.019225f, -0.000523f, 0.100684f), // Joint1
-        new Vector3(-0.0155f, 0.035f, 0.0285f),         // Joint2
-        new Vector3(0.03665f, 0f, 0.146f),              // Joint3
-        new Vector3(-0.01855f, -0.01f, 0.052f),         // Joint4
-        new Vector3(0.0168f, 0.127f, 0f),               // Joint5
-        new Vector3(-0.018506f, 0.077f, -0.000106f)     // Joint6
-    };
-
-    // 从 URDF 提取的精确外壳补偿坐标 (Link Local Position)
-    private readonly Vector3[] fixedLinkPositions = new Vector3[] {
-        new Vector3(0.019225f, 0.000523f, -0.100684f),  // Link1
-        new Vector3(0.034725f, -0.034477f, -0.129184f), // Link2
-        new Vector3(-0.001925f, -0.034477f, -0.275184f),// Link3
-        new Vector3(0.016625f, -0.024477f, -0.327184f), // Link4
-        new Vector3(-0.000175f, -0.151477f, -0.327184f),// Link5
-        new Vector3(0.018331f, -0.228477f, -0.327078f)  // Link6
-    };
-    // ============================================================
-
-    // 🌟 神奇魔法按钮：在 Unity 编辑器里一键拼装并带精准报错！
-    [ContextMenu("⚡ 一键自动装配坐标 (点我)")]
-    public void AutoAssemble()
-    {
-        bool isPerfect = true;
-        
-        if (jointConfigs == null || jointConfigs.Length < 6) {
-            Debug.LogError("❌ [装配失败] 数组长度不够！请把 Joint Configs 的 Size 改为 6！");
-            return;
-        }
-
-        for (int i = 0; i < 6; i++) {
-            if (jointConfigs[i] == null || jointConfigs[i].jointTransform == null) {
-                Debug.LogWarning($"⚠️ [装配警告] 槽位 {i} 是空的！请把左侧对应的 joint 拖进去！");
-                isPerfect = false;
-                continue;
-            }
-
-            Transform currentJoint = jointConfigs[i].jointTransform;
-            currentJoint.localPosition = fixedJointPositions[i]; // 强制写骨架坐标
-
-            bool foundLink = false;
-            foreach (Transform child in currentJoint) {
-                if (child.name.ToLower().Contains("link")) {
-                    child.localPosition = fixedLinkPositions[i]; // 强制写皮肉坐标
-                    foundLink = true;
-                    break; 
-                }
-            }
-            
-            if (!foundLink) {
-                Debug.LogWarning($"⚠️ [装配警告] 在 {currentJoint.name} 里面没找到名字带 'link' 的皮肉模型！");
-                isPerfect = false;
-            }
-        }
-
-        if (isPerfect) {
-            Debug.Log("<color=yellow>🛠️ [坐标注入] 完美！6 个关节的骨架与外壳已严丝合缝拼装完毕！</color>");
-        }
-    }
-
     void Start()
     {
-        // 1. 暴力清理所有物理组件（彻底杜绝散架、鬼畜）
+        // 暴力防散架
         foreach (var rb in GetComponentsInChildren<Rigidbody>(true)) { rb.isKinematic = true; Destroy(rb); }
         foreach (var c in GetComponentsInChildren<Collider>(true)) { Destroy(c); }
         foreach (var ab in GetComponentsInChildren<ArticulationBody>(true)) { Destroy(ab); }
 
-        // 2. 运行瞬间再静默执行一次装配，当做双重保险
-        AutoAssemble(); 
-
-        // 3. 启动 UDP 监听线程
         receiveThread = new Thread(ReceiveData);
         receiveThread.IsBackground = true;
         receiveThread.Start();
-        
-        Debug.Log("<color=green>✅ [系统就绪] 端口复用已开启，物理引擎已卸载，等待 MATLAB 传输...</color>");
     }
 
     private void ReceiveData()
     {
-        // 🚨 解决“只能跑一次”的核心：允许端口强行复用
         udpClient = new UdpClient();
         udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, port));
-
         IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
+        
         while (true) {
             try {
                 byte[] data = udpClient.Receive(ref anyIP);
-                string text = Encoding.UTF8.GetString(data);
-                
-                if (!hasReceivedFirstData) {
-                    Debug.Log("<color=cyan>📡 [通讯成功] 已收到第一帧数据: " + text + "</color>");
-                    hasReceivedFirstData = true;
-                }
-
-                string[] parts = text.Split(',');
+                string[] parts = Encoding.UTF8.GetString(data).Split(',');
                 if (parts.Length >= 6) {
                     lock (lockObject) {
-                        for (int i = 0; i < 6; i++) {
-                            // 强制标准解析，防止系统语言导致的标点符号崩溃
-                            targetAngles[i] = float.Parse(parts[i], CultureInfo.InvariantCulture);
-                        }
+                        for (int i = 0; i < 6; i++) targetAngles[i] = float.Parse(parts[i], CultureInfo.InvariantCulture);
                     }
                 }
-            } catch (SocketException) {
-                // 当我们在 OnDestroy 强行关闭端口时，会触发此错误，直接退出循环即可
-                break; 
-            } catch (Exception e) {
-                Debug.LogError("❌ [UDP 接收报错]: " + e.Message);
-            }
+            } catch (SocketException) { break; } catch { }
         }
     }
 
@@ -161,25 +63,15 @@ public class UDPReceiver : MonoBehaviour
         lock (lockObject) {
             for (int i = 0; i < 6; i++) {
                 if (jointConfigs[i] != null && jointConfigs[i].jointTransform != null) {
-                    // 平滑插值计算
                     currentDisplayAngles[i] = Mathf.Lerp(currentDisplayAngles[i], targetAngles[i], smoothness);
-                    
-                    // 局部坐标系独立旋转驱动
                     jointConfigs[i].jointTransform.localRotation = Quaternion.AngleAxis(currentDisplayAngles[i], jointConfigs[i].rotationAxis);
                 }
             }
         }
     }
 
-    // 🚨 解决“只能跑一次”的终极杀招：精准猎杀残留线程
-    void OnDestroy() 
-    {
-        if (udpClient != null) {
-            udpClient.Close(); // 强行关闭端口
-        }
-        if (receiveThread != null && receiveThread.IsAlive) {
-            receiveThread.Abort(); // 强行猎杀线程
-        }
-        Debug.Log("<color=orange>🛑 [系统清理] 运行停止，UDP 端口 9050 已完美释放，可随时再次 Play。</color>");
+    void OnDestroy() {
+        if (udpClient != null) udpClient.Close();
+        if (receiveThread != null && receiveThread.IsAlive) receiveThread.Abort();
     }
 }
