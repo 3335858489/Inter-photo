@@ -1,0 +1,110 @@
+[终端1] 启动 Gazebo + 机器人
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+cd ~/dummy_ws
+source install/setup.bash
+ros2 launch dummy-ros2_description gazebo.launch.py
+
+[终端2] 启动/检查 ros2_control 控制器 + 发送关节轨迹目标
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+source ~/dummy_ws/install/setup.bash
+# 查看控制器
+ros2 control list_controllers
+# 如未自动加载则手动加载并激活
+ros2 control load_controller --set-state active joint_state_broadcaster
+ros2 control load_controller --set-state active arm_controller
+# 确认都为 active
+ros2 control list_controllers
+# 发送简单关节目标（示例）
+ros2 action send_goal /arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
+  trajectory: {
+    joint_names: [Joint1, Joint2, Joint3, Joint4, Joint5, Joint6],
+    points: [
+      { positions: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], time_from_start: {sec: 2} }
+    ]
+  }
+}" --feedback
+
+[终端3]
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+source /home/donxy/dummy_ws/install/setup.bash
+ros2 control load_controller --set-state active joint_state_broadcaster
+ros2 control load_controller --set-state active arm_controller
+ros2 control list_controllers
+
+[终端4]发轨迹到gazebo
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+source /home/donxy/dummy_ws/install/setup.bash
+ros2 run simulink_motor_controller trajectory_action_sender --ros-args \
+  -p csv_path:=/home/donxy/dummy_ws/src/simulink_motor_controller/data/joint_traj.csv \
+  -p action_name:=/arm_controller/follow_joint_trajectory \
+  -p resample_dt:=0.002
+  
+  
+  
+  
+  
+  
+  如果不够抖，把代码换成这个
+  %% make_point_to_point_traj_shake_test.m
+clear; clc;
+
+dt = 0.002;
+T_move = 1.4;     % 故意压短，增强激励
+T_hold = 1.2;
+t1 = (0:dt:T_move)';
+t2 = (T_move+dt:dt:T_move+T_hold)';
+t  = [t1; t2];
+
+q0 = [0, 0, 0, 0, 0, 0];
+qf = [0.55, -0.45, 0.50, 0.30, -0.25, 0.20];
+
+% 平滑到点
+s = t1 / T_move;
+sigma = 10*s.^3 - 15*s.^4 + 6*s.^5;
+Q1 = zeros(numel(t1),6);
+for j = 1:6
+    Q1(:,j) = q0(j) + (qf(j)-q0(j))*sigma;
+end
+
+% 到位保持
+Q2 = repmat(qf, numel(t2), 1);
+
+% 在保持段中间加一个小阶跃（激励振荡）
+% 例如 t = T_move + 0.35s 后，对 Joint2 增加 0.03 rad
+step_time = T_move + 0.35;
+idx_step = find(t >= step_time, 1, 'first');
+if ~isempty(idx_step)
+    Q2((idx_step-numel(t1)):end,2) = Q2((idx_step-numel(t1)):end,2) + 0.03;
+end
+
+Q = [Q1; Q2];
+Q = max(-3.14, min(3.14, Q));
+
+outDir = '/home/donxy/dummy_ws/src/simulink_motor_controller/data';
+if ~exist(outDir, 'dir'); mkdir(outDir); end
+outFile = fullfile(outDir, 'joint_traj.csv');
+
+TBL = table(t, Q(:,1), Q(:,2), Q(:,3), Q(:,4), Q(:,5), Q(:,6), ...
+    'VariableNames', {'t','Joint1','Joint2','Joint3','Joint4','Joint5','Joint6'});
+writetable(TBL, outFile);
+
+disp(['CSV导出完成: ', outFile]);
+disp('测试说明：快速到点 + 保持段小阶跃，用于放大抖动差异');
+
+
+
+
+备选方案（可以根据ai来修改）
+1) 缩短到达时间（最有效）
+
+同样的 qf，把 T_move 从 2.5 改成：
+
+    1.8（中等）
+    1.4（明显）
+    1.2（很明显）
+
+    越短，加速度越大，越容易激发抖动。
+
+2) 加一个“到位后小阶跃”
+
+在到达目标并保持时，给某个关节一个很小突变（例如 Joint2 +0.03 rad），最能测 PID 抑振能力。
