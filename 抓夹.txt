@@ -1,280 +1,80 @@
-哈哈，直接复制了我的原话！没问题，既然你只有 Windows，那我们就来点**真正硬核的文本“暴力破解法”**。
+使用 `MATLAB Function` 模块编写 PD 控制器确实是最高效且最具“学术范儿”的方法，因为它能通过一行向量化代码处理所有 6 个关节。
 
-其实，刚才仔细看了你发给我的代码，我发现了一个天大的好消息：**针对你这个特定的文件，你根本不需要去配什么 ROS 环境，甚至连 Python 的 xacro 编译库都不需要装！**
+以下是实现这一步的详细步骤，包括模块内部代码编写、参数定义以及如何将它与你之前的电机退化逻辑融合。
 
-为什么？因为你的主文件其实是个“伪 xacro”。你完全没有使用 xacro 的宏定义（macro）来循环生成连杆或关节，你所有的 `<link>` 和 `<joint>` 都是老老实实用纯正的 URDF 格式一行行硬编码写死的！
+### 第一步：创建并定义接口
 
-你文件里仅存的 xacro 和 ROS 痕迹只有三处：
-
-1. 顶部的三个 `<xacro:include>`（引入了外观材质、gazebo 仿真参数和传动装置）。
-2. 网格路径里的 `$(find dummy-ros2_description)`。
-3. 尾部的 `<ros2_control>` 插件定义。
-
-要知道，**MATLAB 的 Simscape 只关心机械臂的拓扑结构、质量惯量和网格图，它完全不解析 Gazebo 的插件和 ROS2 Control！** 所以，在 Windows 下，你只需要用 **VSCode 或者哪怕是系统自带的记事本**，跟着我做以下 4 步“暴力清洗”，它瞬间就会变成 MATLAB 完美识别的纯 URDF：
-
-### Windows 硬核纯文本洗稿法（耗时 3 分钟）
-
-**第 1 步：剥离外衣（重命名）**
-把你这个主文件直接重命名，去掉后缀，改成 `dummy-ros2.urdf`。
-
-**第 2 步：斩断 ROS 羁绊（删减无用代码）**
-用编辑器打开 `dummy-ros2.urdf`，做两件事：
-
-1. **删掉顶部**：把前三行 `<xacro:include ... />` 直接删除。（因为那些是给 Gazebo 渲染用的，MATLAB 自己有渲染器）。
-2. **删掉尾部**：滚动到文件最下面，把从 `` 开始，一直到 `</ros2_control>` 结束的所有代码，**全部删掉**。只保留最后一行的 `</robot>`。
-
-**第 3 步：强行修复空间坐标（全局替换路径）**
-这是最核心的一步，解决 MATLAB 找不到 `.stl` 文件的问题。
-使用编辑器的全局替换（Ctrl + H）功能：
-
-* **查找内容**：`file://$(find dummy-ros2_description)/meshes/`
-* **替换为**：`./meshes/`
-*(这样一替换，所有的网格就会从 ROS 专属寻址变成了 Windows 认得的相对路径)*
-
-**第 4 步：清理命名空间（可选）**
-把第二行 `<robot name="dummy-ros2" xmlns:xacro="http://www.ros.org/wiki/xacro">` 改成干干净净的 `<robot name="dummy-ros2">`。
-
----
-
-### 大功告成！接下来怎么做？
-
-1. 在你的 Windows 电脑上建一个新文件夹（比如叫 `MATLAB_Digital_Twin`）。
-2. 把洗好的 `dummy-ros2.urdf` 放进去。
-3. 把你原来的那个 `meshes` 文件夹（里面全都是 `.stl` 文件）整个复制过来，放在和 URDF 同一个级别的位置。它的目录结构长这样：
-```text
-📁 MATLAB_Digital_Twin
-├── 📄 dummy-ros2.urdf
-└── 📁 meshes
-    ├── 📄 base_link.stl
-    ├── 📄 link1_1_1.stl
-    └── ...
-
-```
-
-
-4. 打开 MATLAB，路径切换到这个文件夹，在命令行敲下：
+1. 在库浏览器中搜索 **`MATLAB Function`**，将其拖入画布，重命名为 `PD_Controller`。
+2. 双击进入编辑器，将默认的函数定义修改为：
 ```matlab
-smimport('dummy-ros2.urdf')
+function tau = PD_Controller(q_ref, q_dot_ref, q_act, q_dot_act, mode)
+% q_ref: 目标角度向量 (6x1)
+% q_dot_ref: 目标角速度向量 (6x1)
+% q_act: Simscape 反馈的实际角度 (6x1)
+% q_dot_act: Simscape 反馈的实际角速度 (6x1)
+% mode: 正常态(0) 或 退化态(1)
 
 ```
 
 
 
-接下来就是见证奇迹的时刻，MATLAB 会在一阵绿条加载后，把你的高保真执行孪生体完美展现在你眼前。
+### 第二步：编写核心控制与退化逻辑
 
-你现在就可以试着用文本编辑器按这个步骤清理一下，如果导入 MATLAB 时弹出了什么红色报错，随时把报错信息贴给我，我帮你排雷！
-没问题，我已经按照你要求的“硬核洗稿法”完成了所有物理层面的清洗工作。这份代码现在已经去掉了所有 ROS 专用的宏定义和插件，并将路径重定向到了 Windows 能够识别的 `./meshes/` 相对路径下。
+在函数内部，你需要定义控制增益，并根据电机物理参数设置力矩限幅。
 
-你可以直接将以下代码保存为 `dummy-ros2.urdf`，放在你存放 `meshes` 文件夹的同一级目录下进行 `smimport` 导入。
+```matlab
+    % 1. 定义 PD 增益 (可以为每个关节设置不同的值，或者统一设置)
+    Kp = [1500; 1800; 1500; 800; 500; 300]; % 比例增益 (根据关节负载从小到大调整)
+    Kd = [150; 180; 150; 80; 50; 30];       % 微分增益 (用于抑制震荡)
 
-```xml
-<?xml version="1.0" ?>
-<robot name="dummy-ros2">
+    % 2. 计算控制误差
+    e = q_ref - q_act;
+    e_dot = q_dot_ref - q_dot_act;
 
-<link name="world" />
-<joint name="world_joint" type="fixed">
-  <parent link="world" />
-  <child link = "base_link" />
-  <origin xyz="0.0 0.0 0.0" rpy="3.1415926536 3.1415926536 0.0" />
-</joint>
+    % 3. 计算理想控制力矩 (向量化计算)
+    tau_ideal = Kp .* e + Kd .* e_dot;
 
-<link name="base_link">
-  <inertial>
-    <origin xyz="-0.019286443307707055 0.0005817485706867557 0.05546290448958129" rpy="0 0 0"/>
-    <mass value="3.4054232030550327"/>
-    <inertia ixx="0.006318" iyy="0.00644" izz="0.006723" ixy="-1.1e-05" iyz="-0.000164" ixz="-2e-06"/>
-  </inertial>
-  <visual>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/base_link.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/base_link.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
+    % 4. 注入电机物理特性 (论文核心：机理结合)
+    % 初始参数: psi = 0.0018 Wb
+    % 退化参数: psi = 0.0015 Wb (磁链下降导致最大转矩常数下降)
+    
+    if mode == 0
+        max_torque = 150; % 正常态最大力矩 (Nm)
+    else
+        % 当磁链从 0.0018 下降到 0.0015，力矩常数约下降 16.7%
+        % 假设电阻 R 增加导致的发热限制了峰值电流，综合限制力矩
+        max_torque = 150 * (0.0015 / 0.0018) * 0.8; % 约为 100 Nm
+    end
 
-<link name="link1_1_1">
-  <inertial>
-    <origin xyz="-0.005744742318232344 0.005464327027038366 0.012045619429015192" rpy="0 0 0"/>
-    <mass value="0.4000119946706078"/>
-    <inertia ixx="0.000172" iyy="0.000152" izz="0.00025" ixy="5.8e-05" iyz="-3.9e-05" ixz="2.7e-05"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.019225 0.000523 -0.100684" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link1_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.019225 0.000523 -0.100684" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link1_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="link2_1_1">
-  <inertial>
-    <origin xyz="0.022476329402049397 0.0015836740439541114 0.0701478637986927" rpy="0 0 0"/>
-    <mass value="0.9644194016592866"/>
-    <inertia ixx="0.003808" iyy="0.003848" izz="0.000499" ixy="-1e-05" iyz="1.3e-05" ixz="0.000274"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.034725 -0.034477 -0.129184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link2_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.034725 -0.034477 -0.129184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link2_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="link3_1_1">
-  <inertial>
-    <origin xyz="-0.010730263185093621 -0.022369081214190782 0.036467614070683996" rpy="0 0 0"/>
-    <mass value="0.3817226974329336"/>
-    <inertia ixx="0.000328" iyy="0.00037" izz="0.000146" ixy="-2.4e-05" iyz="6.8e-05" ixz="6.5e-05"/>
-  </inertial>
-  <visual>
-    <origin xyz="-0.001925 -0.034477 -0.275184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link3_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="-0.001925 -0.034477 -0.275184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link3_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="link4_1_1">
-  <inertial>
-    <origin xyz="-0.004221306676286125 0.09021372117053507 0.00026828289249919424" rpy="0 0 0"/>
-    <mass value="0.44370009904209484"/>
-    <inertia ixx="0.001103" iyy="0.00012" izz="0.001078" ixy="-3.2e-05" iyz="-1e-06" ixz="1e-06"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.016625 -0.024477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link4_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.016625 -0.024477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link4_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="link5_1_1">
-  <inertial>
-    <origin xyz="-0.0007044959912857188 0.04181588666040692 1.9856549020258463e-05" rpy="0 0 0"/>
-    <mass value="0.1329416987985629"/>
-    <inertia ixx="0.000148" iyy="3.5e-05" izz="0.00016" ixy="3e-05" iyz="-0.0" ixz="0.0"/>
-  </inertial>
-  <visual>
-    <origin xyz="-0.000175 -0.151477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link5_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="-0.000175 -0.151477 -0.327184" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link5_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<link name="link6_1_1">
-  <inertial>
-    <origin xyz="8.866549679534264e-08 0.001500477150790519 2.701463612808652e-07" rpy="0 0 0"/>
-    <mass value="0.00918018258883941"/>
-    <inertia ixx="0.0" iyy="1e-06" izz="0.0" ixy="0.0" iyz="0.0" ixz="-0.0"/>
-  </inertial>
-  <visual>
-    <origin xyz="0.018331 -0.228477 -0.327078" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link6_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0.018331 -0.228477 -0.327078" rpy="0 0 0"/>
-    <geometry>
-      <mesh filename="./meshes/link6_1_1.stl" scale="0.001 0.001 0.001"/>
-    </geometry>
-  </collision>
-</link>
-
-<joint name="Joint1" type="revolute">
-  <origin xyz="-0.019225 -0.000523 0.100684" rpy="0 0 0"/>
-  <parent link="base_link"/>
-  <child link="link1_1_1"/>
-  <axis xyz="0.0 -0.0 -1.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
-
-<joint name="Joint2" type="revolute">
-  <origin xyz="-0.0155 0.035 0.0285" rpy="0 0 0"/>
-  <parent link="link1_1_1"/>
-  <child link="link2_1_1"/>
-  <axis xyz="-1.0 -0.0 0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
-
-<joint name="Joint3" type="revolute">
-  <origin xyz="0.03665 0.0 0.146" rpy="0 0 0"/>
-  <parent link="link2_1_1"/>
-  <child link="link3_1_1"/>
-  <axis xyz="-1.0 0.0 -0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
-
-<joint name="Joint4" type="revolute">
-  <origin xyz="-0.01855 -0.01 0.052" rpy="0 0 0"/>
-  <parent link="link3_1_1"/>
-  <child link="link4_1_1"/>
-  <axis xyz="0.0 -1.0 0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
-
-<joint name="Joint5" type="revolute">
-  <origin xyz="0.0168 0.127 0.0" rpy="0 0 0"/>
-  <parent link="link4_1_1"/>
-  <child link="link5_1_1"/>
-  <axis xyz="-1.0 0.0 -0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
-
-<joint name="Joint6" type="revolute">
-  <origin xyz="-0.018506 0.077 -0.000106" rpy="0 0 0"/>
-  <parent link="link5_1_1"/>
-  <child link="link6_1_1"/>
-  <axis xyz="-0.0 -1.0 0.0"/>
-  <limit lower="-3.14" upper="3.14" effort="150" velocity="3.15" />
-</joint>
-
-</robot>
+    % 5. 实施力矩饱和截断
+    tau = max(min(tau_ideal, max_torque), -max_torque);
 
 ```
 
-清洗完成！有了这份代码，你在 MATLAB 中构建执行孪生体的第一步就已经彻底扫平了。祝你在接下来的动力学联合调试中一切顺利，这可是你毕设向小论文进化的关键底座。
+### 第三步：在 Simulink 画布上完成连接
+
+1. **输入端连接**：
+* 将你之前 `Mux` 模块打包好的 **实际位姿 `q**` 接到 `q_act`。
+* 将打包好的 **实际速度 `w**` 接到 `q_dot_act`。
+* `q_ref` 和 `q_dot_ref` 接到你的轨迹生成器（由 PSO 计算出的最优路径）。
+* `mode` 可以接一个 `Constant` 开关（0 或 1），用于演示对比实验。
+
+
+2. **输出端连接**：
+* `tau` 输出直接接到你那个指向 6 个关节 `t` 端口的 **`Demux`（竖线）**。
+
+
+
+### 第四步：参数调节的直观理解
+
+PD 控制器的本质是把关节变成一个“虚拟弹簧”。$K_p$ 决定了弹簧有多硬（跟踪速度），$K_d$ 决定了阻尼有多大（防止震荡）。当电机参数退化后，这个“弹簧”的最大拉力被限制了，这就是数字孪生体现物理实体衰减的关键。
+
+为了帮助你更好地调节这组增益参数，你可以使用下面的交互式仿真器来观察 $K_p$ 和 $K_d$ 对轨迹跟随精度的影响，以及当力矩受限时系统是如何失效的。
+
+### 调试建议：
+
+1. **从小开始**：先将所有关节的 $K_d$ 设为 0，$K_p$ 设一个较小的值（如 100），看机械臂是否能微微克服重力。
+2. **抑制震荡**：逐渐增加 $K_p$ 到产生震荡，然后引入 $K_d$ 来消除震荡。
+3. **向量化调试**：如果某个关节（如大臂关节 2）负载大，就把 $K_p$ 向量里对应的值调大。
+
+完成这一步后，你的机械臂就已经能根据你的指令“动”起来了。接下来只需要把你的 **PSO 寻优算法** 作为轨迹源接入 `q_ref`，整个数字孪生闭环就彻底大功告成了！
