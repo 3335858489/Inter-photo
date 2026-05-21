@@ -1,60 +1,93 @@
-我把整个代码重新整理了一份，主要做了四处关键修复：
+这个错误 `sequence size exceeds remaining buffer` 是 **DDS 反序列化错误**，意思是 MATLAB 端发出的消息字节流和 Ubuntu 端的 trajectory_msgs 定义对不上。这是 MATLAB ROS 2 ↔ ROS 2 Humble 之间一个**非常常见**的兼容性问题，跟你的轨迹优化代码没关系。
 
-1. **ROS 2 `ros2message` 报错** — 改用 `repmat(pt_template, 1, N_send)` 预分配消息数组
-2. **脚本/函数区严格分离** — 原代码在函数定义之后还有脚本代码（包括第二个孪生参数演化图、ROS 2 段落），这在严格 MATLAB 脚本里会报语法错误；全部移到函数定义之前
-3. **孪生参数演化图统一** — 删除重复绘图代码，用最终状态绘制（这样能看到全部 6+ 次更新点，而不是只 1 个）
-4. **ROS 2 positions 显式 `double` 转换** — 防止某些 MATLAB 版本对类型严格检查时的 silent failure# 关键改动清单（按优先级）
+## 第一步：先确认机械臂到底动了没
 
-**1. ROS 2 消息预分配修复（最重要）**
+`ros2 topic echo` 自己解析失败 ≠ controller 没收到。先去 Gazebo 窗口看一下机械臂有没有动。如果动了，那就是 echo 工具自己的问题，可以无视报错继续做实验。
 
-原代码：
-```matlab
-points_array = ros2message('trajectory_msgs/JointTrajectoryPoint', N_send);  % ✗ 报错
-```
-
-新代码：
-```matlab
-pt_template  = ros2message('trajectory_msgs/JointTrajectoryPoint');
-points_array = repmat(pt_template, 1, N_send);  % ✓ 正确
-```
-
-**2. 脚本/函数区结构修复**
-
-原文件在 `plot_J_convergence_from_log` 函数 `end` 之后还有"孪生参数演化图"和 ROS 2 整段脚本代码——这是 MATLAB 严格脚本里的语法错误（脚本语句必须全部在函数定义之前）。新版本把这些代码全部上移到 `%% 16. 孪生参数演化图` 和 `%% 17. ROS 2 通信下发` 两节，所有函数定义集中在文件末尾。
-
-**3. 孪生参数演化图统一**
-
-原代码有两套绘图：主脚本的 `图9` 一套，函数区之后还有一套。前者运行时 twin 只更新过 1 次（早期），所以画出来就是 1 个孤立点（你看到的现象）；后者用最终 twin 状态。新版本只保留一套，放在 Round 2 完成之后绘制，能展示全部 6+ 次更新。
-
-**4. ROS 2 positions 显式类型转换**
-
-```matlab
-points_array(idx).positions = double(q_actual_t(i, :));  % 显式 double
-```
-
-防止某些 MATLAB ROS Toolbox 版本对类型严格检查时的静默失败。
-
-**5. ROS 2 异常捕获改进**
-
-把 `catch` 改成 `catch ME_node` / `catch ME_pub`，打印具体错误消息，方便定位是节点创建失败还是话题创建失败。
-
-# 还需要你在 Ubuntu 端做的两件事
-
-第一，确认 ros2_control 控制器订阅的话题名。在 Ubuntu 终端跑：
+也可以换一个工具验证消息确实到达：
 
 ```bash
-ros2 topic list | grep joint_trajectory
-ros2 control list_controllers
+ros2 topic hz /arm_controller/joint_trajectory       # 只看频率，不解析内容
+ros2 topic info /arm_controller/joint_trajectory -v  # 看订阅者数量与QoS
 ```
 
-如果输出不是 `/arm_controller/joint_trajectory`，改 MATLAB 代码里的 `traj_topic`。
+如果 `ros2 topic info` 显示 "Subscription count: 1+"，且 MATLAB 发送时机械臂动了，说明传输是成功的，echo 只是工具问题。
 
-第二，确认 joint_names 大小写。跑：
+## 第二步：如果机械臂确实没动，根因有 3 个常见可能
+
+**可能 A：未初始化字段被序列化为脏数据**
+
+MATLAB 的 `repmat(pt_template, 1, N)` 之后，`velocities/accelerations/effort` 字段是空 `[]`，理论上应该序列化为"长度为0的序列"。但在某些版本下会出错。**显式赋零**最稳：
+
+```matlab
+for idx = 1:N_send
+    i = ds_idx_send(idx);
+    
+    points_array(idx).positions     = double(q_actual_t(i, :));
+    points_array(idx).velocities    = double(zeros(1, 6));   % ★ 显式赋值
+    points_array(idx).accelerations = double(zeros(1, 6));   % ★
+    points_array(idx).effort        = double(zeros(1, 6));   % ★
+    
+    current_time = t(i) + 0.1;
+    sec_part  = floor(current_time);
+    nsec_part = (current_time - sec_part) * 1e9;
+    points_array(idx).time_from_start.sec     = int32(sec_part);
+    points_array(idx).time_from_start.nanosec = uint32(nsec_part);
+end
+```
+
+**可能 B：RMW（DDS 中间件）不一致**
+
+MATLAB ROS 2 默认用 **Fast-DDS**，而 Ubuntu Humble 默认也是 Fast-DDS，但如果你装过 cyclonedds 并 export 过环境变量，两边就对不上了。先查 Ubuntu 端：
 
 ```bash
-ros2 control list_hardware_interfaces
+echo $RMW_IMPLEMENTATION
 ```
 
-看输出里关节是 `Joint1` 还是 `joint1` 还是 `joint_1`。MATLAB 这边的 `msg_traj.joint_names` 必须**逐字符**匹配（区分大小写、区分下划线），否则 controller 会拒收消息且不报错——只是机械臂不动。
+如果输出 `rmw_cyclonedds_cpp`，就要么把 Ubuntu 切回默认：
 
-跑完后如果还有错，把新的报错贴上来，我帮你看下一层。
+```bash
+unset RMW_IMPLEMENTATION
+# 或者
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+# 然后重启 ros2_control 和 echo 终端
+```
+
+要么在 MATLAB 这边也切到 cyclone（**MATLAB 启动前**在 shell 里 export，再启动 MATLAB）。
+
+**可能 C：header.stamp 未设置导致控制器拒收**
+
+JointTrajectoryController 默认会用 `header.stamp` 做时间基准。MATLAB 端没有设置过 `msg_traj.header.stamp`，它会是 (0,0)。controller 会拒掉"过时"的轨迹。在 ROS 2 中可以让它用"接收到时刻"作为起点：
+
+```matlab
+% 在 send 之前补充：
+msg_traj.header.stamp.sec     = int32(0);
+msg_traj.header.stamp.nanosec = uint32(0);    % 0 表示用接收时刻
+msg_traj.header.frame_id      = '';            % 空字符串
+```
+
+## 第三步：最小化复现以缩小问题
+
+如果上面都试了还不动，把 N_send 降到 2 看看：
+
+```matlab
+N_send = 2;
+ds_idx_send = [1, length(t)];
+```
+
+只发起点和终点。如果 2 个点的轨迹能正常收到、机械臂能动，那 51 个点失败就是 **buffer size** 问题，可以在 Ubuntu 端设置：
+
+```bash
+export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/large_buffer_profile.xml
+```
+
+或者干脆把 MATLAB 端的下发频率提高、单次点数压缩到 20 个以下。
+
+## 推荐操作顺序
+
+1. 先看 Gazebo 是否动了（最快验证）
+2. 若没动 → 加 `header.stamp = (0,0)` + 显式赋值 `velocities/accelerations/effort`
+3. 再没动 → 对齐 `RMW_IMPLEMENTATION`
+4. 还不行 → 降到 2 点测试
+
+把每一步的结果（Gazebo 动/没动、echo 是否还报错、controller_manager 的日志）反馈给我，我们逐步收敛。
