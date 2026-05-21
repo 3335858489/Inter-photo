@@ -1,80 +1,60 @@
-使用 `MATLAB Function` 模块编写 PD 控制器确实是最高效且最具“学术范儿”的方法，因为它能通过一行向量化代码处理所有 6 个关节。
+我把整个代码重新整理了一份，主要做了四处关键修复：
 
-以下是实现这一步的详细步骤，包括模块内部代码编写、参数定义以及如何将它与你之前的电机退化逻辑融合。
+1. **ROS 2 `ros2message` 报错** — 改用 `repmat(pt_template, 1, N_send)` 预分配消息数组
+2. **脚本/函数区严格分离** — 原代码在函数定义之后还有脚本代码（包括第二个孪生参数演化图、ROS 2 段落），这在严格 MATLAB 脚本里会报语法错误；全部移到函数定义之前
+3. **孪生参数演化图统一** — 删除重复绘图代码，用最终状态绘制（这样能看到全部 6+ 次更新点，而不是只 1 个）
+4. **ROS 2 positions 显式 `double` 转换** — 防止某些 MATLAB 版本对类型严格检查时的 silent failure# 关键改动清单（按优先级）
 
-### 第一步：创建并定义接口
+**1. ROS 2 消息预分配修复（最重要）**
 
-1. 在库浏览器中搜索 **`MATLAB Function`**，将其拖入画布，重命名为 `PD_Controller`。
-2. 双击进入编辑器，将默认的函数定义修改为：
+原代码：
 ```matlab
-function tau = PD_Controller(q_ref, q_dot_ref, q_act, q_dot_act, mode)
-% q_ref: 目标角度向量 (6x1)
-% q_dot_ref: 目标角速度向量 (6x1)
-% q_act: Simscape 反馈的实际角度 (6x1)
-% q_dot_act: Simscape 反馈的实际角速度 (6x1)
-% mode: 正常态(0) 或 退化态(1)
-
+points_array = ros2message('trajectory_msgs/JointTrajectoryPoint', N_send);  % ✗ 报错
 ```
 
-
-
-### 第二步：编写核心控制与退化逻辑
-
-在函数内部，你需要定义控制增益，并根据电机物理参数设置力矩限幅。
-
+新代码：
 ```matlab
-    % 1. 定义 PD 增益 (可以为每个关节设置不同的值，或者统一设置)
-    Kp = [1500; 1800; 1500; 800; 500; 300]; % 比例增益 (根据关节负载从小到大调整)
-    Kd = [150; 180; 150; 80; 50; 30];       % 微分增益 (用于抑制震荡)
-
-    % 2. 计算控制误差
-    e = q_ref - q_act;
-    e_dot = q_dot_ref - q_dot_act;
-
-    % 3. 计算理想控制力矩 (向量化计算)
-    tau_ideal = Kp .* e + Kd .* e_dot;
-
-    % 4. 注入电机物理特性 (论文核心：机理结合)
-    % 初始参数: psi = 0.0018 Wb
-    % 退化参数: psi = 0.0015 Wb (磁链下降导致最大转矩常数下降)
-    
-    if mode == 0
-        max_torque = 150; % 正常态最大力矩 (Nm)
-    else
-        % 当磁链从 0.0018 下降到 0.0015，力矩常数约下降 16.7%
-        % 假设电阻 R 增加导致的发热限制了峰值电流，综合限制力矩
-        max_torque = 150 * (0.0015 / 0.0018) * 0.8; % 约为 100 Nm
-    end
-
-    % 5. 实施力矩饱和截断
-    tau = max(min(tau_ideal, max_torque), -max_torque);
-
+pt_template  = ros2message('trajectory_msgs/JointTrajectoryPoint');
+points_array = repmat(pt_template, 1, N_send);  % ✓ 正确
 ```
 
-### 第三步：在 Simulink 画布上完成连接
+**2. 脚本/函数区结构修复**
 
-1. **输入端连接**：
-* 将你之前 `Mux` 模块打包好的 **实际位姿 `q**` 接到 `q_act`。
-* 将打包好的 **实际速度 `w**` 接到 `q_dot_act`。
-* `q_ref` 和 `q_dot_ref` 接到你的轨迹生成器（由 PSO 计算出的最优路径）。
-* `mode` 可以接一个 `Constant` 开关（0 或 1），用于演示对比实验。
+原文件在 `plot_J_convergence_from_log` 函数 `end` 之后还有"孪生参数演化图"和 ROS 2 整段脚本代码——这是 MATLAB 严格脚本里的语法错误（脚本语句必须全部在函数定义之前）。新版本把这些代码全部上移到 `%% 16. 孪生参数演化图` 和 `%% 17. ROS 2 通信下发` 两节，所有函数定义集中在文件末尾。
 
+**3. 孪生参数演化图统一**
 
-2. **输出端连接**：
-* `tau` 输出直接接到你那个指向 6 个关节 `t` 端口的 **`Demux`（竖线）**。
+原代码有两套绘图：主脚本的 `图9` 一套，函数区之后还有一套。前者运行时 twin 只更新过 1 次（早期），所以画出来就是 1 个孤立点（你看到的现象）；后者用最终 twin 状态。新版本只保留一套，放在 Round 2 完成之后绘制，能展示全部 6+ 次更新。
 
+**4. ROS 2 positions 显式类型转换**
 
+```matlab
+points_array(idx).positions = double(q_actual_t(i, :));  % 显式 double
+```
 
-### 第四步：参数调节的直观理解
+防止某些 MATLAB ROS Toolbox 版本对类型严格检查时的静默失败。
 
-PD 控制器的本质是把关节变成一个“虚拟弹簧”。$K_p$ 决定了弹簧有多硬（跟踪速度），$K_d$ 决定了阻尼有多大（防止震荡）。当电机参数退化后，这个“弹簧”的最大拉力被限制了，这就是数字孪生体现物理实体衰减的关键。
+**5. ROS 2 异常捕获改进**
 
-为了帮助你更好地调节这组增益参数，你可以使用下面的交互式仿真器来观察 $K_p$ 和 $K_d$ 对轨迹跟随精度的影响，以及当力矩受限时系统是如何失效的。
+把 `catch` 改成 `catch ME_node` / `catch ME_pub`，打印具体错误消息，方便定位是节点创建失败还是话题创建失败。
 
-### 调试建议：
+# 还需要你在 Ubuntu 端做的两件事
 
-1. **从小开始**：先将所有关节的 $K_d$ 设为 0，$K_p$ 设一个较小的值（如 100），看机械臂是否能微微克服重力。
-2. **抑制震荡**：逐渐增加 $K_p$ 到产生震荡，然后引入 $K_d$ 来消除震荡。
-3. **向量化调试**：如果某个关节（如大臂关节 2）负载大，就把 $K_p$ 向量里对应的值调大。
+第一，确认 ros2_control 控制器订阅的话题名。在 Ubuntu 终端跑：
 
-完成这一步后，你的机械臂就已经能根据你的指令“动”起来了。接下来只需要把你的 **PSO 寻优算法** 作为轨迹源接入 `q_ref`，整个数字孪生闭环就彻底大功告成了！
+```bash
+ros2 topic list | grep joint_trajectory
+ros2 control list_controllers
+```
+
+如果输出不是 `/arm_controller/joint_trajectory`，改 MATLAB 代码里的 `traj_topic`。
+
+第二，确认 joint_names 大小写。跑：
+
+```bash
+ros2 control list_hardware_interfaces
+```
+
+看输出里关节是 `Joint1` 还是 `joint1` 还是 `joint_1`。MATLAB 这边的 `msg_traj.joint_names` 必须**逐字符**匹配（区分大小写、区分下划线），否则 controller 会拒收消息且不报错——只是机械臂不动。
+
+跑完后如果还有错，把新的报错贴上来，我帮你看下一层。
