@@ -1,80 +1,56 @@
-你的判断**完全正确**——红球位置没问题，是**机械臂的姿态本身就和 MATLAB 对不上**。看两张图就很清楚：
+路径是我猜的，你的不一定叫这个。先用 `find` 把文件找出来。
 
-- **MATLAB 里**：零位时手臂竖直向上（Z 方向），蓝色轨迹绕着灰球向上走。
-- **Gazebo 里**：同样的关节角，手臂却是**横着伸出去**的，根本不是竖直向上。
-
-同样的关节角 `[0,0,0,0,0,0]`，两边姿态差这么多，说明 **MATLAB 的运动学模型和真实 URDF 不是一个模型**。
-
-## 根因：MATLAB 模型丢了 URDF 里的旋转
-
-对比一下，URDF 里有几个 MATLAB 模型**完全没建**的旋转：
-
-**① Joint3 自带 -90° 俯仰：**
-```xml
-<joint name="Joint3" ...>
-  <origin xyz="0.03665 0.0 0.146" rpy="0 -1.57 0"/>   <!-- ★ 这个 -1.57 -->
-```
-这一下就让 link3 之后整条手臂**横过来 90°**，而 MATLAB 的 `p`/`ax` 里没有这个旋转。
-
-**② world_joint 翻转底座：**
-```xml
-<joint name="world_joint" ...>
-  <origin xyz="0 0 0" rpy="3.1415926536 3.1415926536 0.0"/>
-```
-
-**③ 关节轴方向：** URDF 里 Joint1 轴是 `[0,0,-1]`、Joint2 是 `[-1,0,0]`，而 MATLAB 用的是 `[0,0,1]`、`[0,1,0]`。
-
-而你 MATLAB 建 `robot` 时用的是：
-```matlab
-setFixedTransform(jnt, trvec2tform(p(i,:)));   % ★ 只有平移，没有任何旋转！
-```
-
-`trvec2tform` 只设平移，URDF 里那些 rpy 旋转全丢了。所以 MATLAB 的"竖直手臂"是个**理想化的错模型**，发到 Gazebo 自然对不上。
-
-## 正确的修法：让 MATLAB 直接用 URDF 的真实运动学
-
-最干净的办法是**别再手搓简化模型，直接把 URDF 导进 MATLAB**，这样 IK、动力学、末端轨迹、障碍物坐标全部和 Gazebo 在同一个真实坐标系里，红球和路径自然就对上了。
-
-**第一步：xacro 转 urdf（Ubuntu 端）**
+## 找 xacro 文件
 
 ```bash
-cd ~/dummy_ws
-source install/setup.bash
-xacro src/dummy-ros2_description/urdf/dummy-ros2.xacro > /tmp/dummy-ros2.urdf
-# 路径换成你 xacro 的实际位置
+find ~/dummy_ws -name "*.xacro"
+find ~/dummy_ws -name "*.urdf"
 ```
 
-把 `/tmp/dummy-ros2.urdf` 拷到 MATLAB 能读到的文件夹。
+第一条列出所有 xacro，里面应该有一个名字带 `dummy-ros2` 的主文件（就是你之前贴给我的那个带 `<xacro:include>` 和所有 link 的）。第二条看有没有现成的 urdf。
 
-**第二步：MATLAB 里用 importrobot 替换手搓模型**
+也可以直接定位 urdf 目录：
 
-把主脚本里"构建 rigidBodyTree"那一整段（`robot = rigidBodyTree(...)` 到 `addBody` 循环结束）换成：
-
-```matlab
-robot = importrobot('dummy-ros2.urdf');   % 路径换成你拷过去的
-robot.DataFormat = 'row';
-robot.Gravity    = [0 0 -9.81];
+```bash
+find ~/dummy_ws/src -type d -name "urdf"
 ```
 
-importrobot 会**自动**带上 world 链、world_joint、每个关节的真实 origin+rpy+axis、以及质量惯量。这样：
-- `getTransform(robot, q, 'link6_1_1')` 直接给出 world 系下的真实末端位置
-- IK 解出的关节角发到 Gazebo，末端会真的到目标点
-- 障碍物坐标和 Gazebo 完全一致，不用再翻符号、不用再猜
+找到后进去看：
 
-**第三步：连带要改的地方**
+```bash
+ls -l ~/dummy_ws/src/dummy-ros2_description/urdf/   # 路径按 find 结果改
+```
 
-因为模型变了，下游有几处要跟着改：
-- `kinematics_full(q,p,ax)` 全部换成 `getTransform(robot, q, 'link6_1_1')`（末端）和逐关节 `getTransform(robot, q, 'linkN_1_1')`（取关节位置做地面/障碍检测）
-- 末端 link 名从 `'link6'` 改成 URDF 里的 `'link6_1_1'`
-- 目标点和障碍物坐标重新在 **world 系**下指定
-- 重新跑一遍优化（因为运动学变了，最优轨迹会不同）
+应该能看到 `materials.xacro`、`dummy-ros2.trans`、`dummy-ros2.gazebo`，以及那个主 xacro（可能叫 `dummy-ros2.xacro` 或 `dummy-ros2.urdf.xacro`）。用真实文件名替换我之前命令里的路径再跑 `xacro`。
 
-## 这是个不小的改动，先确认方向
+## 更省事的办法：直接从运行中的机器人导出 URDF
 
-这样改完才能让"避障"在 Gazebo 里**真实成立**，而不是看着像。但它要重写 MATLAB 的运动学部分并重跑优化。
+其实 Gazebo 启动时，`robot_state_publisher` 里已经存着**展开好的完整 URDF**（xacro 已经处理过了）。如果你嫌找 xacro 麻烦，**保持 Gazebo 在跑**，直接导出：
 
-如果你确认要走这条路，我可以**帮你把整个主脚本改成基于 importrobot 的版本**——你只要先做第一步（xacro→urdf）确认能生成 urdf，然后告诉我，我把改好的完整 `robot3_enhanced.m` 给你。
+```bash
+ros2 param get /robot_state_publisher robot_description > /tmp/dummy-ros2_raw.txt
+```
 
-如果你只是要个"演示视频"不追求物理精确，那就保持现状，手动把红球挪到 Gazebo 实际路径旁边凑个样子也行。
+这个文件开头会有一行 `String value is:` 的前缀，需要删掉，让文件从 `<?xml` 开始、到 `</robot>` 结束。可以用文本编辑器删，或者：
 
-你倾向哪种？要做就先在 Ubuntu 跑一下 `xacro ... > /tmp/dummy-ros2.urdf`，看能不能成功生成那个 urdf 文件。
+```bash
+# 去掉第一行前缀，得到干净 urdf
+tail -n +1 /tmp/dummy-ros2_raw.txt | sed 's/^String value is: //' > /tmp/dummy-ros2.urdf
+```
+
+然后检查一下确实是合法 urdf：
+
+```bash
+head -5 /tmp/dummy-ros2.urdf     # 第一行应是 <?xml ... ?> 或 <robot ...>
+tail -3 /tmp/dummy-ros2.urdf     # 最后应是 </robot>
+```
+
+这个导出版本的好处是 **xacro 全展开了、include 都合并了**，importrobot 读起来最省心。
+
+## 提醒：mesh 路径
+
+不管哪种方式得到的 urdf，里面 mesh 都是 `file://$(find dummy-ros2_description)/meshes/xxx.stl` 这种路径，MATLAB 的 `importrobot` 解析不了。两个办法：
+- importrobot 默认会**跳过解析不了的 mesh**（只是没有可视化外形，运动学/动力学不受影响）——对我们够用了。
+- 如果它报错，加参数让它忽略 mesh：`robot = importrobot('dummy-ros2.urdf', 'MeshPath', {});`
+
+先跑 `find ~/dummy_ws -name "*.xacro"`，把输出贴上来，我帮你确认主文件名和完整命令。或者直接用上面的 `robot_state_publisher` 导出法，也行。
