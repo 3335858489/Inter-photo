@@ -1,203 +1,87 @@
-# Ubuntu 端完整操作流程（MATLAB → Gazebo 轨迹下发）
+关键确认：你的工作区是 `~/dummy_ws`，而且**所有命令里都没有 `export ROS_DOMAIN_ID=30`**。这就石锤了我上一条的判断——你的控制器一直跑在**默认域 0** 上。我那份 runbook 让你到处加 `export ROS_DOMAIN_ID=30`，反而把能用的环境搞坏了。抱歉。
 
-> 目标：在 Ubuntu 虚拟机里启动 Gazebo + ros2_control，然后接收 MATLAB 通过
-> `/arm_controller/follow_joint_trajectory` (Action) 下发的轨迹，让机械臂运动。
->
-> 关键前提：MATLAB 端用的是 `ROS_DOMAIN_ID=30`，关节名 `Joint1~Joint6`，
-> 默认 RMW (Fast-DDS)。Ubuntu 端**所有终端**都必须与之一致。
+**正确做法：跟你原来一样，哪儿都不要设域，全用默认 0。** 然后 MATLAB 那边也必须改成域 0（这才是 MATLAB 一直发不过去的真正原因）。
 
----
+下面按你的实际设置给出每个终端的命令。
 
-## 0. 一次性前提确认
-
-确认 ROS 2 Humble 已安装、你的机器人工作区已编译：
+## 终端 1 — Gazebo（保持运行）
 
 ```bash
-# 确认 ROS 2 版本
-ls /opt/ros/                       # 应能看到 humble
-
-# 确认你的工作区已 build（路径换成你自己的）
-ls ~/ros2_ws/install/setup.bash    # 文件存在即可
-```
-
-确认 RMW 中间件（必须与 MATLAB 一致，MATLAB 默认 Fast-DDS）：
-
-```bash
-echo $RMW_IMPLEMENTATION
-```
-
-- 如果输出**空**：默认就是 `rmw_fastrtps_cpp`，与 MATLAB 一致 ✓
-- 如果输出 `rmw_cyclonedds_cpp`：与 MATLAB 不一致 ✗，需要 `unset RMW_IMPLEMENTATION`
-  或在 MATLAB 端也切到 cyclone。
-
----
-
-## 1. 终端布局（开 3 个终端）
-
-| 终端 | 用途 |
-|------|------|
-| **T1** | 启动 Gazebo + 控制器（一直占用） |
-| **T2** | 验证 / 归零 / 排错 |
-| **T3** | 实时监控 joint_states（一直占用） |
-
-**每个新开的终端**第一件事都是这三行（缺一不可）：
-
-```bash
+cd ~/dummy_ws
+colcon build                          # 仅首次或改过代码时需要
+source install/setup.bash
 source /opt/ros/humble/setup.bash
-source ~/ros2_ws/install/setup.bash      # ← 换成你的工作区路径
-export ROS_DOMAIN_ID=30
-```
-
-> 建议把这三行加到 `~/.bashrc` 末尾，以后开终端自动生效，省得每次手敲。
-
----
-
-## 2. T1 — 启动 Gazebo + 控制器
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/ros2_ws/install/setup.bash
-export ROS_DOMAIN_ID=30
-
-# 启动你的 launch 文件（包名/文件名换成你自己的）
 ros2 launch dummy-ros2_description gazebo.launch.py
 ```
 
-等到 T1 日志里出现类似：
-
-```
-[spawner-x] Configured and activated joint_state_broadcaster
-[spawner-y] Configured and activated arm_controller
-[spawner-z] Configured and activated gripper_controller
-```
-
-就说明控制器都起来了。**这个终端保持不动**，不要 Ctrl+C。
-
----
-
-## 3. T2 — 启动后验证（发送前必做）
+## 终端 2 — 控制器验证 + 归零
 
 ```bash
 source /opt/ros/humble/setup.bash
-source ~/ros2_ws/install/setup.bash
-export ROS_DOMAIN_ID=30
+source ~/dummy_ws/install/setup.bash
 
-# ① 控制器是否 active
+# 列出控制器
 ros2 control list_controllers
-#   期望：arm_controller ... active
 
-# ② Action server 是否存在
-ros2 action list
-#   期望：/arm_controller/follow_joint_trajectory
+# 如果没自动加载，手动加载
+ros2 control load_controller --set-state active joint_state_broadcaster
+ros2 control load_controller --set-state active arm_controller
 
-# ③ Action 详情（确认有 server）
-ros2 action info /arm_controller/follow_joint_trajectory
-#   期望：Action servers: 1
+# 确认都是 active
+ros2 control list_controllers
 
-# ④ 能否看到 MATLAB 节点（MATLAB 那边建好 node 后再查）
-ros2 node list
-#   MATLAB 运行后期望能看到 /matlab_trajectory_sender
+# 归零（发全零目标，顺便验证 action 通道）
+ros2 action send_goal /arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{trajectory: {joint_names: [Joint1, Joint2, Joint3, Joint4, Joint5, Joint6], points: [{positions: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], time_from_start: {sec: 2}}]}}" --feedback
 ```
 
-四项都 OK 才继续。
-
----
-
-## 4. T2 — 机械臂归零（重要！）
-
-MATLAB 轨迹的起点是 `q_start = [0,0,0,0,0,0]`。如果 Gazebo 里机械臂不在零位，
-controller 会因为"第一点离当前位置太远"而拒绝或瞬跳。**发送 MATLAB 轨迹前，先归零**：
-
-```bash
-ros2 action send_goal /arm_controller/follow_joint_trajectory \
-  control_msgs/action/FollowJointTrajectory \
-  "{trajectory: {joint_names: ['Joint1','Joint2','Joint3','Joint4','Joint5','Joint6'], points: [{positions: [0,0,0,0,0,0], time_from_start: {sec: 3, nanosec: 0}}]}}"
-```
-
-看到 `Goal finished with status: SUCCEEDED`，且 Gazebo 里机械臂回到伸直/初始位姿，
-说明归零成功，也顺便验证了 Action 通道本身是通的。
-
----
-
-## 5. T3 — 实时监控关节位置（保持运行）
+## 终端 3 — 实时监控关节位置（保持运行）
 
 ```bash
 source /opt/ros/humble/setup.bash
-source ~/ros2_ws/install/setup.bash
-export ROS_DOMAIN_ID=30
+source ~/dummy_ws/install/setup.bash
 
 ros2 topic echo /joint_states --field position
 ```
 
-这个会持续刷新。归零后应该看到前 6 个值接近 0（第 7 个是 gripper 的 finger_joint1，忽略）。
-**这个终端保持运行**，等会儿看 MATLAB 发轨迹后数值变化。
+这个会持续刷新，是判断"机械臂到底动没动"的最可靠依据。MATLAB 发轨迹后，前 6 个值应在约 10 秒内从 0 平滑爬到目标值。
 
----
+## 终端 4（可选）— Rviz / MoveIt
 
-## 6. 切到 MATLAB 端发送
+```bash
+cd ~/dummy_ws
+colcon build                          # 仅首次或改过代码时需要
+source install/setup.bash
+ros2 launch dummy_moveit_config demo.launch.py
+```
 
-回到 MATLAB（Windows），先跑主优化脚本生成 `traj_export_enhanced.mat`，
-然后运行独立发送脚本：
+> 注意：MoveIt 的 `demo.launch.py` 有时会自带一套 controller_manager，可能和终端 1 的 Gazebo 控制器冲突。如果只是测 MATLAB 轨迹下发，**这个终端可以先不开**，避免抢控制器。等基本通了再决定要不要可视化。
+
+## ★ 最关键的一步：改 MATLAB，去掉域 30
+
+打开 `send_trajectory_action.m`，把这行：
 
 ```matlab
-send_trajectory_action
+setenv('ROS_DOMAIN_ID', '30');
 ```
 
-MATLAB 命令行应打印 `Goal 状态: succeeded`。
+改成：
 
----
-
-## 7. 发送后验证
-
-**看 T3**：6 个关节位置应在约 10 秒内平滑爬升到目标值
-`[0.43, 2.37, -1.88, 0.00, -0.50, -0.43]` 附近（弧度）。
-
-**看 Gazebo**：机械臂应平滑运动到目标位姿。
-
-**看 T1**：应出现
-```
-[arm_controller]: Received new action goal
-[arm_controller]: Accepted new action goal
-[arm_controller]: Goal reached, success!
+```matlab
+setenv('ROS_DOMAIN_ID', '0');     % 与 Ubuntu 控制器一致（默认域）
 ```
 
-三处一致 = 成功。
+或者干脆**整行删掉**（MATLAB 默认就是域 0）。
 
----
+如果你之前的主脚本 `robot3_enhanced.m` 里也还残留着 `setenv('ROS_DOMAIN_ID', '30')`，一并改掉/删掉。
 
-## 8. 排错速查表
-
-| 现象 | 检查命令 | 可能原因 / 解决 |
-|------|---------|----------------|
-| MATLAB 报 "Action server 未上线" | `ros2 action info /arm_controller/follow_joint_trajectory` | T1 没起好，或 DOMAIN_ID 不一致 |
-| `ros2 node list` 看不到 `/matlab_trajectory_sender` | `echo $ROS_DOMAIN_ID`（两端对比） | DOMAIN_ID 不一致，或 RMW 不一致 |
-| Goal 状态 = `aborted` | `ros2 topic echo /arm_controller/controller_state` | 路径/时间容差太严，放宽 goal_tolerance |
-| 机械臂 2 秒就"瞬跳"到终点 | 看轨迹 time_from_start | 时间戳没递增，检查 t_offset / header.stamp |
-| 归零都不动 | `ros2 control list_controllers` | arm_controller 未 active；重启 T1 |
-| `topic echo` 报 buffer 错误 | 改用 `ros2 topic hz` 或 `--once` | echo 工具问题，不影响 Action 投递 |
-
-实时看控制器内部状态（跟踪误差、是否中止）：
-
-```bash
-ros2 topic echo /arm_controller/controller_state
-```
-
-查所有相关话题/动作：
-
-```bash
-ros2 topic list | grep arm_controller
-ros2 action list
-```
-
----
-
-## 9. 完整顺序速记
+## 完整顺序
 
 ```
-T1: source×3 → ros2 launch ...                    （启动，保持）
-T2: source×3 → list_controllers / action info     （验证）
-T2: action send_goal 归零                          （归零）
-T3: source×3 → topic echo /joint_states            （监控，保持）
-MATLAB: send_trajectory_action                     （发送）
-观察 T3 + Gazebo + T1 日志                          （验证成功）
+终端1: cd dummy_ws → (colcon build) → source×2 → ros2 launch gazebo      （保持）
+终端2: source×2 → list_controllers → (load if needed) → 归零 action       （验证+归零）
+终端3: source×2 → topic echo /joint_states --field position              （监控，保持）
+MATLAB: 改 setenv 为 '0' 或删除 → 跑 send_trajectory_action               （发送）
+观察 终端3 数值变化 + Gazebo 运动                                          （成功）
 ```
+
+先把终端 1/2/3 按上面跑起来，确认终端 2 的归零命令能让机械臂动、终端 3 能看到数值。这两步通了之后，MATLAB 改成域 0 再发，就应该一次成功。哪步卡住贴输出。
