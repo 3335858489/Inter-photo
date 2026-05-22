@@ -1,56 +1,111 @@
-路径是我猜的，你的不一定叫这个。先用 `find` 把文件找出来。
+确实，从你发的轨迹图可以看出，之前的目标点（`X=0.15`）距离起点太近，而障碍物（半径 `0.06`）又恰好卡在正中间，导致剩余的可达空间非常狭窄。机械臂为了避开它，只能在极小的空间内“扭曲”姿态，所以投影图里的避障曲线看起来很局促、不平滑。
 
-## 找 xacro 文件
+为了让避障效果更明显、轨迹更舒展，我们需要**把目标点拉远**，同时**把障碍物放置在真正阻碍主路径的位置**，并适当调整半径。
 
-```bash
-find ~/dummy_ws -name "*.xacro"
-find ~/dummy_ws -name "*.urdf"
+这里我为你重新设计了一套参数：
+
+* **新目标点：** `[0.22, 0.10, 0.15]`（向外伸展得更远，且带有一定侧向偏移）。
+* **新障碍物：** 放在 `[0.11, 0.05, 0.30]`，半径调整为 `0.05`。这样它会稳稳地挡在起点到终点的直线连线中央，迫使机械臂画出一个漂亮且平滑的绕行弧线。
+
+以下是需要同步修改的两段代码：
+
+### 1. MATLAB 代码修改
+
+替换你原来的 `%% 2. 起点 + 目标点 IK` 到 `%% 3. 障碍物` 这一整段：
+
+```matlab
+%% 2. 起点 + 目标点 IK
+q_start  = [0,0,0,0,0,0];
+% 调整目标点：拉长 X 向距离，增加 Y 向侧移，使轨迹更舒展
+p_target = [0.22, 0.10, 0.15]; 
+
+T0 = getTransform(robot, q_start, 'link6_1_1');
+R_target = T0(1:3,1:3);
+
+T_target = eye(4);
+T_target(1:3,1:3) = R_target;
+T_target(1:3,4)   = p_target(:);
+
+[q_end, okIK, infoIK] = ik_solve_with_rbt(robot, q_start, T_target);
+
+if ~okIK
+    searchOpt.range          = 0.03;
+    searchOpt.step           = 0.003;
+    searchOpt.keepSameZFirst = true;
+    [q_end, p_target_used, okSearch, infoSearch] = ...
+        ik_fallback_nearby_search(robot, q_start, p_target, R_target, searchOpt);
+    if ~okSearch
+        error('IK失败且邻域未找到可达点。');
+    else
+        disp('原目标IK失败，已切换到邻域最近可达点。');
+        disp(['原目标 = [', num2str(p_target,'%.4f '), ']']);
+        disp(['替代目标 = [', num2str(p_target_used,'%.4f '), ']']);
+        disp(['|dp| = ', num2str(norm(p_target_used-p_target),'%.4f'), ' m']);
+        disp(['IK误差 = ', num2str(infoSearch.bestPosErr,'%.6f'), ' m']);
+    end
+else
+    p_target_used = p_target;
+    disp(['IK成功，目标点 = [', num2str(p_target_used,'%.4f '), ']']);
+    disp(['IK误差 = ', num2str(infoIK.posErr,'%.6f'), ' m']);
+end
+
+q_end = max(-pi, min(pi, q_end));
+disp(['q_end(deg) = [', num2str(rad2deg(q_end),'%.2f '), ']']);
+
+%% 2.1 终点与工作空间约束
+twin.goal_pos       = p_target_used;
+twin.goal_tol       = 0.005;
+twin.goal_penalty_k = 5e4;
+twin.ws_x = [-0.40, 0.40];
+twin.ws_y = [-0.40, 0.40];
+twin.ws_z = [ 0.05, 0.60];
+twin.ws_penalty_k = 2e3;
+
+%% 3. 障碍物 (现与 Gazebo 真实坐标系完全一致)
+% 直接指定障碍物坐标，挡在起终点连线的必经之路上
+obs.centers = [0.11, 0.05, 0.30]; 
+obs.radii   = 0.05; 
+obs.num     = 1;
+
 ```
 
-第一条列出所有 xacro，里面应该有一个名字带 `dummy-ros2` 的主文件（就是你之前贴给我的那个带 `<xacro:include>` 和所有 link 的）。第二条看有没有现成的 urdf。
+---
 
-也可以直接定位 urdf 目录：
+### 2. URDF / Gazebo 模型文件修改
 
-```bash
-find ~/dummy_ws/src -type d -name "urdf"
+由于在你的 URDF 中 `world_joint` 包含了 `rpy="3.14 3.14 0"`，这意味着相对于 `world` 坐标系，机器人的 `base_link` 在 X 和 Y 方向上是反转的。
+
+因此，MATLAB 里的 `[0.11, 0.05, 0.30]` 对应到 Gazebo `world` 系的坐标必须是 `[-0.11, -0.05, 0.30]`。请用下面这段替换你原来的障碍物 XML 节点：
+
+```xml
+<link name="obstacle_link">
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <sphere radius="0.05"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <sphere radius="0.05"/>
+    </geometry>
+  </collision>
+  <inertial>
+    <mass value="0.001"/>
+    <inertia ixx="1e-6" iyy="1e-6" izz="1e-6" ixy="0" iyz="0" ixz="0"/>
+  </inertial>
+</link>
+
+<joint name="obstacle_joint" type="fixed">
+  <parent link="world"/>
+  <child link="obstacle_link"/>
+  <origin xyz="-0.11 -0.05 0.30" rpy="0 0 0"/>
+</joint>
+
+<gazebo reference="obstacle_link">
+  <material>Gazebo/Red</material>
+</gazebo>
+
 ```
-
-找到后进去看：
-
-```bash
-ls -l ~/dummy_ws/src/dummy-ros2_description/urdf/   # 路径按 find 结果改
-```
-
-应该能看到 `materials.xacro`、`dummy-ros2.trans`、`dummy-ros2.gazebo`，以及那个主 xacro（可能叫 `dummy-ros2.xacro` 或 `dummy-ros2.urdf.xacro`）。用真实文件名替换我之前命令里的路径再跑 `xacro`。
-
-## 更省事的办法：直接从运行中的机器人导出 URDF
-
-其实 Gazebo 启动时，`robot_state_publisher` 里已经存着**展开好的完整 URDF**（xacro 已经处理过了）。如果你嫌找 xacro 麻烦，**保持 Gazebo 在跑**，直接导出：
-
-```bash
-ros2 param get /robot_state_publisher robot_description > /tmp/dummy-ros2_raw.txt
-```
-
-这个文件开头会有一行 `String value is:` 的前缀，需要删掉，让文件从 `<?xml` 开始、到 `</robot>` 结束。可以用文本编辑器删，或者：
-
-```bash
-# 去掉第一行前缀，得到干净 urdf
-tail -n +1 /tmp/dummy-ros2_raw.txt | sed 's/^String value is: //' > /tmp/dummy-ros2.urdf
-```
-
-然后检查一下确实是合法 urdf：
-
-```bash
-head -5 /tmp/dummy-ros2.urdf     # 第一行应是 <?xml ... ?> 或 <robot ...>
-tail -3 /tmp/dummy-ros2.urdf     # 最后应是 </robot>
-```
-
-这个导出版本的好处是 **xacro 全展开了、include 都合并了**，importrobot 读起来最省心。
-
-## 提醒：mesh 路径
-
-不管哪种方式得到的 urdf，里面 mesh 都是 `file://$(find dummy-ros2_description)/meshes/xxx.stl` 这种路径，MATLAB 的 `importrobot` 解析不了。两个办法：
-- importrobot 默认会**跳过解析不了的 mesh**（只是没有可视化外形，运动学/动力学不受影响）——对我们够用了。
-- 如果它报错，加参数让它忽略 mesh：`robot = importrobot('dummy-ros2.urdf', 'MeshPath', {});`
-
-先跑 `find ~/dummy_ws -name "*.xacro"`，把输出贴上来，我帮你确认主文件名和完整命令。或者直接用上面的 `robot_state_publisher` 导出法，也行。
