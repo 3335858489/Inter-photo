@@ -1,88 +1,80 @@
-先把 MATLAB 那个障碍物的位置算清楚，再说怎么落到 Gazebo。
+你的判断**完全正确**——红球位置没问题，是**机械臂的姿态本身就和 MATLAB 对不上**。看两张图就很清楚：
 
-## MATLAB 障碍物到底在哪
+- **MATLAB 里**：零位时手臂竖直向上（Z 方向），蓝色轨迹绕着灰球向上走。
+- **Gazebo 里**：同样的关节角，手臂却是**横着伸出去**的，根本不是竖直向上。
+
+同样的关节角 `[0,0,0,0,0,0]`，两边姿态差这么多，说明 **MATLAB 的运动学模型和真实 URDF 不是一个模型**。
+
+## 根因：MATLAB 模型丢了 URDF 里的旋转
+
+对比一下，URDF 里有几个 MATLAB 模型**完全没建**的旋转：
+
+**① Joint3 自带 -90° 俯仰：**
+```xml
+<joint name="Joint3" ...>
+  <origin xyz="0.03665 0.0 0.146" rpy="0 -1.57 0"/>   <!-- ★ 这个 -1.57 -->
+```
+这一下就让 link3 之后整条手臂**横过来 90°**，而 MATLAB 的 `p`/`ax` 里没有这个旋转。
+
+**② world_joint 翻转底座：**
+```xml
+<joint name="world_joint" ...>
+  <origin xyz="0 0 0" rpy="3.1415926536 3.1415926536 0.0"/>
+```
+
+**③ 关节轴方向：** URDF 里 Joint1 轴是 `[0,0,-1]`、Joint2 是 `[-1,0,0]`，而 MATLAB 用的是 `[0,0,1]`、`[0,1,0]`。
+
+而你 MATLAB 建 `robot` 时用的是：
+```matlab
+setFixedTransform(jnt, trvec2tform(p(i,:)));   % ★ 只有平移，没有任何旋转！
+```
+
+`trvec2tform` 只设平移，URDF 里那些 rpy 旋转全丢了。所以 MATLAB 的"竖直手臂"是个**理想化的错模型**，发到 Gazebo 自然对不上。
+
+## 正确的修法：让 MATLAB 直接用 URDF 的真实运动学
+
+最干净的办法是**别再手搓简化模型，直接把 URDF 导进 MATLAB**，这样 IK、动力学、末端轨迹、障碍物坐标全部和 Gazebo 在同一个真实坐标系里，红球和路径自然就对上了。
+
+**第一步：xacro 转 urdf（Ubuntu 端）**
+
+```bash
+cd ~/dummy_ws
+source install/setup.bash
+xacro src/dummy-ros2_description/urdf/dummy-ros2.xacro > /tmp/dummy-ros2.urdf
+# 路径换成你 xacro 的实际位置
+```
+
+把 `/tmp/dummy-ros2.urdf` 拷到 MATLAB 能读到的文件夹。
+
+**第二步：MATLAB 里用 importrobot 替换手搓模型**
+
+把主脚本里"构建 rigidBodyTree"那一整段（`robot = rigidBodyTree(...)` 到 `addBody` 循环结束）换成：
 
 ```matlab
-obs_center = ([0,0,0.464] + p_target_used)/2;   % p_target_used = [0.15,0.05,0.20]
+robot = importrobot('dummy-ros2.urdf');   % 路径换成你拷过去的
+robot.DataFormat = 'row';
+robot.Gravity    = [0 0 -9.81];
 ```
 
-- `[0,0,0.464]` 是机械臂**零位时末端的位置**（手臂竖直向上，EE 在 z≈0.464）
-- target 是 `[0.15, 0.05, 0.20]`
-- 所以 **球心 = [0.075, 0.025, 0.332]，半径 0.06**，正好卡在"竖直起点"和"目标点"连线的中点上挡路。
+importrobot 会**自动**带上 world 链、world_joint、每个关节的真实 origin+rpy+axis、以及质量惯量。这样：
+- `getTransform(robot, q, 'link6_1_1')` 直接给出 world 系下的真实末端位置
+- IK 解出的关节角发到 Gazebo，末端会真的到目标点
+- 障碍物坐标和 Gazebo 完全一致，不用再翻符号、不用再猜
 
-注意这是个**球**（`obs.radii`），不是你 SDF 里那个 box。要和 MATLAB 避障完全对应，Gazebo 里也该放球。
+**第三步：连带要改的地方**
 
-## 两个坐标系坑（重要）
+因为模型变了，下游有几处要跟着改：
+- `kinematics_full(q,p,ax)` 全部换成 `getTransform(robot, q, 'link6_1_1')`（末端）和逐关节 `getTransform(robot, q, 'linkN_1_1')`（取关节位置做地面/障碍检测）
+- 末端 link 名从 `'link6'` 改成 URDF 里的 `'link6_1_1'`
+- 目标点和障碍物坐标重新在 **world 系**下指定
+- 重新跑一遍优化（因为运动学变了，最优轨迹会不同）
 
-**坑1：world_joint 翻转了 X、Y。** 你的 xacro 里：
+## 这是个不小的改动，先确认方向
 
-```xml
-<joint name="world_joint" ... >
-  <origin xyz="0 0 0" rpy="3.1415926536 3.1415926536 0.0" />
-</joint>
-```
+这样改完才能让"避障"在 Gazebo 里**真实成立**，而不是看着像。但它要重写 MATLAB 的运动学部分并重跑优化。
 
-rpy=(π,π,0) 的旋转矩阵是 `diag(-1,-1,1)`——也就是 **X、Y 取反，Z 不变**。所以 MATLAB base 系的 `[0.075, 0.025, 0.332]` 映射到 **world 系大约是 `[-0.075, -0.025, 0.332]`**。
+如果你确认要走这条路，我可以**帮你把整个主脚本改成基于 importrobot 的版本**——你只要先做第一步（xacro→urdf）确认能生成 urdf，然后告诉我，我把改好的完整 `robot3_enhanced.m` 给你。
 
-**坑2：MATLAB 是简化模型，和 URDF 运动学不完全一致。** 你 MATLAB 里的 `p`（关节偏移）是理想化的（比如 p1=[0,0,0.1265]），但 URDF 里 Joint1 origin 是 `[-0.019, -0.0005, 0.1007]`，还有 Joint3 带了 `rpy="0 -1.57 0"`。质量/惯量是对的，但几何偏移被简化了。**这意味着同样的关节角，MATLAB 末端和 Gazebo 末端会落在略微不同的物理位置。** 所以障碍物坐标只能算个**近似起点，需要现场微调**。
+如果你只是要个"演示视频"不追求物理精确，那就保持现状，手动把红球挪到 Gazebo 实际路径旁边凑个样子也行。
 
-## "悬空"不是问题——固定到 world 就行
-
-你担心的"悬空不好配备"其实不存在：只要把障碍物用 **fixed joint 连到 `world`**，它就被刚性钉死在空中，不会掉、不会动，根本不需要支撑柱。这也是最省事的"落地"方式。
-
-## 直接写进 xacro 的代码
-
-在你的主 xacro 文件里（`</robot>` 之前的任意位置，比如紧跟 camera 那几段后面）加上：
-
-```xml
-<!-- ===== 与 MATLAB 一致的球形障碍物 ===== -->
-<!-- MATLAB base 系球心 [0.075,0.025,0.332]，半径 0.06 -->
-<!-- world_joint 翻转 X、Y，故 world 系起步坐标 [-0.075,-0.025,0.332]，需现场微调 -->
-<link name="obstacle_link">
-  <visual>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <geometry>
-      <sphere radius="0.06"/>
-    </geometry>
-    <material name="silver"/>
-  </visual>
-  <collision>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <geometry>
-      <sphere radius="0.06"/>
-    </geometry>
-  </collision>
-  <inertial>
-    <mass value="0.001"/>
-    <inertia ixx="1e-6" iyy="1e-6" izz="1e-6" ixy="0" iyz="0" ixz="0"/>
-  </inertial>
-</link>
-
-<joint name="obstacle_joint" type="fixed">
-  <parent link="world"/>
-  <child link="obstacle_link"/>
-  <origin xyz="-0.075 -0.025 0.332" rpy="0 0 0"/>
-</joint>
-
-<gazebo reference="obstacle_link">
-  <material>Gazebo/Red</material>
-</gazebo>
-```
-
-改完后 `cd ~/dummy_ws && colcon build`，重启终端 1 的 gazebo launch，障碍物（红球）就会出现在固定位置。
-
-## 如何确认/微调位置
-
-因为坑2，红球大概率不会精确卡在机械臂路径中点上。**经验法**最靠谱：
-
-1. 先不放障碍物，跑一遍 MATLAB 轨迹，在 Rviz/Gazebo 里看末端实际走的弧线。
-2. 再加障碍物，看红球是不是落在弧线"绕过去"的那个位置。
-3. 不对就改 `obstacle_joint` 的 `origin xyz`，重新 build。每次只动一个分量（先调 Z，再调 X/Y 正负号）。
-
-如果发现 X、Y 符号要反过来（即 `[0.075, 0.025, 0.332]` 才对），说明你的 MATLAB 模型其实是在 world 系下建的、没受 world_joint 影响——那就用正号版本。两个都试一下，哪个红球贴着路径就用哪个。
-
-## 关于 MoveIt（如果以后要用）
-
-把障碍物写进 xacro，**MoveIt 会把它当成机器人本体的一部分**（self-collision），这在纯 Gazebo 可视化里没问题，但如果以后要用 MoveIt 做避障规划就不合适了。那种情况下应该改用你那个 Python 脚本，通过 `/planning_scene` 把它作为独立 `CollisionObject` 加进去——但你现在是 MATLAB 直接发轨迹给 controller、不经过 MoveIt，所以**写进 xacro 完全够用**。
-
-先用 `[-0.075, -0.025, 0.332]` 这个起点放进去看看，红球出现后对照机械臂路径微调即可。
+你倾向哪种？要做就先在 Ubuntu 跑一下 `xacro ... > /tmp/dummy-ros2.urdf`，看能不能成功生成那个 urdf 文件。
