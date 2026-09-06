@@ -1,85 +1,174 @@
-这次结果是成功的，但它验证的是**轨迹 Action 下发与位置跟踪**，还没有验证到 Gazebo 的关节力矩。
+那就可以确定了：你现在已经不是接口问题，而是**Gazebo 当前直接 position 控制不会产生可用的 joint effort**。
 
-你这次看到的：
-
-```text
-desired:
-  effort: []
-
-actual:
-  effort: []
-
-error:
-  effort: []
-```
-
-属于 `/arm_controller/follow_joint_trajectory` 的 Action feedback。它为空是正常的，因为你当前 `arm_controller` 的状态反馈配置只有：
-
-```yaml
-state_interfaces:
-  - position
-  - velocity
-```
-
-所以**这里的 `effort: []` 不等于 `/joint_states.effort` 没有数据**。这两条链路要分开看。
-
-从这次结果可以确认：
+这一步不要再动 launch、红球、controller_manager、YAML。只改一个文件最合适：
 
 ```text
-Goal successfully reached!
-Goal finished with status: SUCCEEDED
+~/dummy_ws/src/dummy-ros2_description/urdf/dummy-ros2.xacro
 ```
 
-而且末端时刻的关节位置误差大约只有：
+我已经给你做了一个**最小修改版 v5**：
+
+[下载 dummy_ws_effort_pid_v5.zip](sandbox:/mnt/data/dummy_ws_effort_pid_v5.zip)
+
+包里核心只有这个文件：
+
+[下载修改后的 dummy-ros2.xacro](sandbox:/mnt/data/dummy_ws_effort_pid_v5/dummy_ws/src/dummy-ros2_description/urdf/dummy-ros2.xacro)
+
+这版和你当前恢复正常的 v4 相比，只做了一件事：给 Joint1～Joint6 加 position PID 参数。
+
+关键是，**外部 command interface 仍然保持 `position`**，所以你的：
 
 ```text
-Joint1 ≈ 0.000329 rad
-Joint2 ≈ 0.000314 rad
-Joint3 ≈ 0.000251 rad
-Joint4 ≈ 0.000149 rad
-Joint5 ≈ 0.000103 rad
-Joint6 ≈ 0.000185 rad
+/arm_controller/follow_joint_trajectory
 ```
 
-约为 `0.006°～0.019°`，说明目前：
+完全不用改，MATLAB 位置轨迹发送方式也不用改。
+
+官方 `gazebo_ros2_control` 的 Humble 文档明确支持在 position command interface 下通过 PID 参数启用位置 PID；插件检测到 `pos_kp/pos_ki/pos_kd` 后，会把位置误差转换为力矩并通过 Gazebo `SetForce()` 施加到关节。这样 `/joint_states.effort` 才会有实际值。([控制ROS][1])
+
+我给你的初始参数是：
 
 ```text
-FollowJointTrajectory
-        ↓
-arm_controller
-        ↓
-Gazebo机械臂
-        ↓
-实际关节运动
+Joint1: Kp=60   Ki=0   Kd=3
+Joint2: Kp=90   Ki=0   Kd=5
+Joint3: Kp=75   Ki=0   Kd=4
+Joint4: Kp=45   Ki=0   Kd=2.5
+Joint5: Kp=30   Ki=0   Kd=1.8
+Joint6: Kp=20   Ki=0   Kd=1.2
 ```
 
-这条链路工作正常。
+我先把积分项设为 0，是为了避免一上来积分累积导致振荡或饱和。后面如果出现静态误差，再小幅增加 Ki。
 
-## 现在只做一个测试
+## 你只覆盖这一个文件
 
-不要改代码。
+把压缩包里的：
 
-### 终端 2：先持续读取 `/joint_states`
+```text
+dummy_ws/src/dummy-ros2_description/urdf/dummy-ros2.xacro
+```
+
+覆盖到：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/urdf/dummy-ros2.xacro
+```
+
+这些全部不要动：
+
+```text
+gazebo.launch.py
+CMakeLists.txt
+package.xml
+dummy-ros2.gazebo
+dummy-ros2.trans
+ros2_controllers.yaml
+moveit_controllers.yaml
+models/obstacle_box/*
+```
+
+所以你的红色球也不会受到影响。
+
+## 替换以后重新编译
+
+先彻底退出 Gazebo。
+
+然后：
+
+```bash
+cd ~/dummy_ws
+
+rm -rf build/dummy-ros2_description
+rm -rf install/dummy-ros2_description
+
+source /opt/ros/humble/setup.bash
+
+colcon build --symlink-install --packages-select dummy-ros2_description
+
+source ~/dummy_ws/install/setup.bash
+
+export ROS_DOMAIN_ID=0
+
+ros2 launch dummy-ros2_description gazebo.launch.py
+```
+
+启动时注意终端 1。
+
+如果 PID 被正确识别，Gazebo 日志里应该出现类似：
+
+```text
+Found position PIDs for joint: Joint1!
+Found position PIDs for joint: Joint2!
+Found position PIDs for joint: Joint3!
+...
+Found position PIDs for joint: Joint6!
+```
+
+这个信息很重要。
+
+## 然后先检查 controller 没被破坏
+
+新终端：
 
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/dummy_ws/install/setup.bash
 export ROS_DOMAIN_ID=0
 
+ros2 control list_controllers
+```
+
+应保持：
+
+```text
+joint_state_broadcaster   active
+arm_controller            active
+```
+
+再：
+
+```bash
+ros2 control list_hardware_interfaces
+```
+
+仍应看到：
+
+```text
+Joint1/position [available] [claimed]
+...
+Joint6/position [available] [claimed]
+```
+
+和：
+
+```text
+Joint1/effort
+...
+Joint6/effort
+```
+
+这说明我们没有改变外部 position command interface。
+
+## 然后测试非零 effort
+
+终端 2：
+
+```bash
 ros2 topic echo /joint_states
 ```
 
 保持运行。
 
-### 终端 3：再让机械臂做一个时间更长、幅度更大的运动
-
-建议用 5 秒，方便观察：
+终端 3：
 
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/dummy_ws/install/setup.bash
 export ROS_DOMAIN_ID=0
+```
 
+发送：
+
+```bash
 ros2 action send_goal \
 /arm_controller/follow_joint_trajectory \
 control_msgs/action/FollowJointTrajectory \
@@ -93,137 +182,49 @@ control_msgs/action/FollowJointTrajectory \
 --feedback
 ```
 
-然后你**不要把 Action Feedback 发给我**，而是看终端 2 中这种内容：
+这次看 `/joint_states` 中：
 
-```yaml
-name:
-- Joint1
-- Joint2
-...
-
-position:
-...
-
-velocity:
-...
-
+```text
 effort:
-- ...
-- ...
-- ...
-- ...
-- ...
-- ...
 ```
 
-我要看的就是最后这六个 `effort`。
+如果变成类似：
 
----
-
-## 可能出现三种结果
-
-### 情况 A：effort 是非零变化值
-
-比如：
-
-```yaml
+```text
 effort:
-- 0.182
-- -0.536
-- 0.247
-- 0.061
-- -0.043
-- 0.018
+- 0.18
+- -0.74
+- 0.51
+- 0.12
+- -0.08
+- 0.03
 ```
 
-并且运动过程中持续变化。
-
-这就是最理想的结果。
-
-那么 Gazebo 侧就已经满足：
-
-$$
-q_{\mathrm{GZ}},\quad
-\dot q_{\mathrm{GZ}},\quad
-\tau_{\mathrm{GZ}}
-$$
-
-全部可以反馈给 MATLAB。
-
-下一步直接开始 MATLAB-Gazebo 闭环联调。
-
----
-
-### 情况 B：还是全部 0
-
-比如：
-
-```yaml
-effort:
-- 0.0
-- 0.0
-- 0.0
-- 0.0
-- 0.0
-- 0.0
-```
-
-那就说明目前：
+并且随运动变化，就说明：
 
 ```text
-effort interface      已经注册 ✓
-位置轨迹控制          正常 ✓
-Gazebo实际力矩反馈    仍未产生 ✗
+position reference
+      ↓
+Gazebo position PID
+      ↓
+joint torque
+      ↓
+Gazebo dynamics
+      ↓
+/joint_states.effort
 ```
 
-这时我们才需要改下一版 Xacro，让 Gazebo 通过真正的力矩型位置闭环执行，而不是现在的直接 position mode。
+已经真正打通。
 
-并且这次只改这一层，不再碰红球、launch、controller_manager。
-
----
-
-### 情况 C：出现 `.nan`
-
-也直接把 `/joint_states` 的完整一帧发我。
-
----
-
-## 一个容易混淆的地方
-
-你现在其实存在两类反馈：
+还有一点需要注意：Action feedback 里的：
 
 ```text
-/arm_controller/follow_joint_trajectory feedback
+desired.effort: []
+actual.effort: []
 ```
 
-主要用于：
+仍然可能为空，这不影响我们。论文和 MATLAB 后面用的是 `/joint_states.effort`，不是 FollowJointTrajectory feedback 里的 effort。
 
-```text
-desired position
-actual position
-position error
-```
+如果换完 v5 后出现**明显抖动、快速振荡、Goal aborted 或力矩瞬间很大**，先不要继续调参数，把终端 1 的 PID 初始化日志和运动时的一帧 `/joint_states` 发给我，我再给你调第二版 PID。
 
-而论文闭环模型更新真正需要的是：
-
-```text
-/joint_states
-```
-
-中的：
-
-```text
-position
-velocity
-effort
-```
-
-所以 MATLAB 后面也应该主要从 `/joint_states` 获取：
-
-$$
-q,\dot q,\tau
-$$
-
-而不是依赖 Action feedback 中的 `effort`。
-
-因此你这一次实验**已经证明轨迹发送成功，而且跟踪精度很好**。现在就差把运动过程中的 `/joint_states.effort` 发给我。
+[1]: https://control.ros.org/humble/doc/gazebo_ros2_control/doc/index.html?utm_source=chatgpt.com "gazebo_ros2_control — ROS2_Control: Humble Sep 2026 documentation"
