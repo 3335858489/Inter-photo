@@ -1,22 +1,7 @@
-user@user-virtual-machine:~$ export ROS_DOMAIN_ID=0
+ros2 control list_controllers
+
+ros2 control list_hardware_interfaces
+
+ros2 topic echo /joint_states --once
+
 ros2 action list
-/arm_controller/follow_joint_trajectory
-/gripper_controller/follow_joint_trajectory
-user@user-virtual-machine:~$ ros2 controll list_controllers
-usage: ros2 [-h] [--use-python-default-buffering]
-            Call `ros2 <command> -h` for more detailed usage. ...
-ros2: error: argument Call `ros2 <command> -h` for more detailed usage.: invalid choice: 'controll' (choose from 'action', 'bag', 'component', 'control', 'daemon', 'doctor', 'extension_points', 'extensions', 'interface', 'launch', 'lifecycle', 'multicast', 'node', 'param', 'pkg', 'plugin', 'run', 'security', 'service', 'topic', 'wtf')
-user@user-virtual-machine:~$ ros control list_hardware_interfaces
-找不到命令 “ros”，但有 13 个相似命令。
-user@user-virtual-machine:~$ ^C
-user@user-virtual-machine:~$ ros2 control list_hardware_interfacecs
-usage: ros2 control [-h]
-                    Call `ros2 control <command> -h` for more detailed usage.
-                    ...
-ros2 control: error: argument Call `ros2 control <command> -h` for more detailed usage.: invalid choice: 'list_hardware_interfacecs' (choose from 'list_controller_types', 'list_controllers', 'list_hardware_components', 'list_hardware_interfaces', 'load_controller', 'reload_controller_libraries', 'set_controller_state', 'set_hardware_component_state', 'switch_controllers', 'unload_controller', 'view_controller_chains')
-user@user-virtual-machine:~$ ros2 topic ech0/joint_states --once
-usage: ros2 topic [-h] [--include-hidden-topics]
-                  Call `ros2 topic <command> -h` for more detailed usage. ...
-ros2 topic: error: argument Call `ros2 topic <command> -h` for more detailed usage.: invalid choice: 'ech0/joint_states' (choose from 'bw', 'delay', 'echo', 'find', 'hz', 'info', 'list', 'pub', 'type')
-user@user-virtual-machine:~$ ^C
-user@user-virtual-machine:~$ 
