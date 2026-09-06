@@ -1,298 +1,172 @@
-这个报错说明现在不是控制器没激活，而是 **`/controller_manager` 整个没有起来**：
+现在这一步已经恢复正常了，而且关键链路都起来了。
+
+从你这三段输出可以确认：
+
+* `/controller_manager` 已正常存在
+* `joint_state_broadcaster` 是 active
+* `arm_controller` 是 active
+* Joint1～Joint6 的 `effort` state interface 已经全部注册
+* `gripper_controller` inactive 不影响我们当前六轴机械臂闭环实验，可以暂时不管
+
+也就是说，目前 Gazebo 侧已经恢复到：
 
 ```text
-Could not contact service /controller_manager/list_controllers
+MATLAB / ROS 2
+    ↓
+arm_controller
+    ↓
+Joint1~Joint6 position command
+    ↓
+Gazebo
+    ↓
+position
+velocity
+effort interface
 ```
 
-这通常意味着 Gazebo 里的 `gazebo_ros2_control` 插件没有成功初始化，或者机器人没有正常 spawn 完成。
+现在只差最后一个关键验证：
 
-我重新检查了你上传的完整 `dummy_ws.zip`，发现前一版 v3 一次性改了 PID、launch、package、扰动桥，改动确实太多了。现在先恢复到你原来能正常启动 controller_manager 的结构，只保留两件必要修改：
+> `/joint_states.effort` 到底是不是有效的非零动态数据。
 
-1. Joint1～Joint6 的 `effort state_interface`
-2. MATLAB 同位置的红色球
+## 你现在直接做下面这个测试
 
-我已经重新做了一份 **恢复版 v4**：
-
-[下载 dummy_ws 恢复版 v4](sandbox:/mnt/data/dummy_ws_recovery_v4.zip)
-
-这版不会再自动启动扰动桥，也不会改你的 `package.xml` 和控制器 YAML。
-
-## 你只覆盖这 5 个文件
-
-压缩包里的目录已经和你的工程对应好了。
-
-```text
-dummy_ws/src/dummy-ros2_description/
-├── CMakeLists.txt
-├── launch/
-│   └── gazebo.launch.py
-├── urdf/
-│   └── dummy-ros2.xacro
-└── models/
-    └── obstacle_box/
-        ├── model.config
-        └── model.sdf
-```
-
-分别覆盖到：
-
-```text
-~/dummy_ws/src/dummy-ros2_description/
-```
-
-### 不要再修改这些
-
-这次以下文件全部保持你自己的原版：
-
-```text
-package.xml
-urdf/dummy-ros2.gazebo
-urdf/dummy-ros2.trans
-urdf/materials.xacro
-
-dummy_moveit_config/config/ros2_controllers.yaml
-dummy_moveit_config/config/moveit_controllers.yaml
-
-set_obstacle.py
-collision_replanner.py
-```
-
-尤其不要再换 `ros2_controllers.yaml`。
-
----
-
-## 这一版为什么更稳
-
-你原来的 `gazebo.launch.py` 本身就是延迟 10～11.5 s 加载三个 controller，我这版保持了这个启动结构，只额外在 6.5 s 生成红色球。
-
-你的 `dummy-ros2.xacro` 也恢复成原来的 position command：
-
-```xml
-<command_interface name="position">
-```
-
-只保留：
-
-```xml
-<state_interface name="position"/>
-<state_interface name="velocity"/>
-<state_interface name="effort"/>
-```
-
-所以暂时**没有 PID 参数**。
-
-官方 `gazebo_ros2_control` 确实支持 position PID，但现在先不把两个问题混在一起处理。先恢复 controller_manager，随后再单独解决 effort 非零的问题。([控制ROS][1])
-
----
-
-# 替换以后不要直接普通 build
-
-这次建议把旧的 description build/install 清掉，避免你实际运行的还是上一版。
-
-先关闭 Gazebo。
-
-然后终端 1 执行：
-
-```bash
-cd ~/dummy_ws
-
-rm -rf build/dummy-ros2_description
-rm -rf install/dummy-ros2_description
-
-source /opt/ros/humble/setup.bash
-
-colcon build --symlink-install --packages-select dummy-ros2_description
-```
-
-看到成功后：
+### 终端 2：持续看反馈
 
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/dummy_ws/install/setup.bash
-
 export ROS_DOMAIN_ID=0
+
+ros2 topic echo /joint_states
 ```
 
-再启动：
+保持这个终端一直显示。
 
-```bash
-ros2 launch dummy-ros2_description gazebo.launch.py
-```
-
-### 这次先等 15 秒
-
-不要 Gazebo 一出现就马上执行 `list_controllers`。
-
-你的启动顺序现在大致是：
-
-```text
-0 s       Gazebo启动
-
-5 s       机械臂生成
-          桌子生成
-
-6.5 s     红色球生成
-
-8 s       蓝色目标方块生成
-
-10 s      joint_state_broadcaster
-
-11 s      arm_controller
-
-11.5 s    gripper_controller
-```
-
-所以至少等 15 秒。
-
----
-
-# 然后终端 2 执行
+然后新开一个终端 3，发一个小幅度轨迹：
 
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/dummy_ws/install/setup.bash
-
 export ROS_DOMAIN_ID=0
+
+ros2 action send_goal \
+/arm_controller/follow_joint_trajectory \
+control_msgs/action/FollowJointTrajectory \
+"{trajectory: {
+  joint_names: [Joint1, Joint2, Joint3, Joint4, Joint5, Joint6],
+  points: [{
+    positions: [0.10, -0.10, 0.10, 0.05, -0.05, 0.05],
+    time_from_start: {sec: 3, nanosec: 0}
+  }]
+}}" \
+--feedback
 ```
 
-先不要直接执行 `ros2 control list_controllers`。
-
-先执行：
-
-```bash
-ros2 node list
-```
-
-我们首先应该看到：
+然后看终端 2 里的：
 
 ```text
-/controller_manager
+effort:
 ```
 
-你也可以直接：
+### 我们希望看到的是
 
-```bash
-ros2 node list | grep controller_manager
-```
-
-### 如果出现
+类似：
 
 ```text
-/controller_manager
+effort:
+- 0.14
+- -0.32
+- 0.21
+- 0.06
+- -0.03
+- 0.01
 ```
 
-再执行：
+而且这些数值在机械臂运动过程中会变化。
 
-```bash
-ros2 control list_controllers
-```
-
-正常应恢复成：
+如果是这样，那么：
 
 ```text
-joint_state_broadcaster    ... active
-arm_controller             ... active
-gripper_controller         ... active
+Gazebo
+→ joint effort
+→ /joint_states
+→ MATLAB
 ```
 
-然后：
-
-```bash
-ros2 control list_hardware_interfaces
-```
-
-应该仍然有：
-
-```text
-Joint1/effort
-Joint1/position
-Joint1/velocity
-...
-Joint6/effort
-Joint6/position
-Joint6/velocity
-```
+这条力矩反馈链已经彻底打通。
 
 ---
 
-# 红色球也保留了
+## 如果还是全 0
 
-这次我没有再新建模型目录，而是直接使用你原工程已有的：
-
-```text
-dummy-ros2_description/models/obstacle_box/
-```
-
-只把里面原来的红色方块改成了球：
+比如：
 
 ```text
-radius = 0.03 m
+effort:
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+- 0.0
 ```
 
-MATLAB中的球心仍是：
-
-```matlab
-[0.15, -0.05, 0.15]
-```
-
-而你的 `base_link` 相对 Gazebo world 有：
-
-```xml
-rpy="pi pi 0"
-```
-
-因此 Gazebo world 中对应位置是：
+那说明现在只是：
 
 ```text
-[-0.15, 0.05, 0.15]
+effort interface 已注册
 ```
 
-新的 launch 已经自动使用这个位置。
+但 Gazebo 当前的直接 position 模式没有真正产生可读执行力矩。
 
-所以启动后你应该看到：
-
-```text
-机械臂
-桌子
-红色球
-蓝色目标块
-```
-
----
-
-## 如果 v4 后还是没有 `/controller_manager`
-
-那就不要再改任何代码了。
-
-只把**终端 1 里 `ros2 launch dummy-ros2_description gazebo.launch.py` 从机器人开始 spawn 到报错的那一段**发给我。
-
-重点找这些关键词：
+这种情况下下一步再单独处理 position PID，不再碰：
 
 ```text
-gazebo_ros2_control
+launch
 controller_manager
-Failed
-ERROR
-plugin
-robot_description
+红球
+package.xml
 ```
 
-因为：
+只改最小范围。
+
+---
+
+## 如果出现 `.nan`
+
+如果重新变成：
 
 ```text
-ros2 control list_controllers
+effort:
+- .nan
+...
 ```
 
-现在只是症状。
+那也不要继续改文件，把运动时的完整 `/joint_states` 输出发我，我再判断。
 
-真正的错误一定发生在**终端1 Gazebo加载 `libgazebo_ros2_control.so` 的时候**。
+---
 
-先用这版恢复 controller_manager。等它恢复以后，我们再单独处理：
+### 现在你不用管 gripper_controller
+
+你当前看到：
 
 ```text
-effort = 0
+gripper_controller inactive
 ```
 
-不会再同时动 launch、PID、扰动桥和控制器。
+完全没关系。
 
-[1]: https://control.ros.org/humble/doc/gazebo_ros2_control/doc/index.html?utm_source=chatgpt.com "gazebo_ros2_control — ROS2_Control: Humble Sep 2026 documentation"
+我们的闭环实验只需要：
+
+```text
+Joint1
+Joint2
+Joint3
+Joint4
+Joint5
+Joint6
+```
+
+所以现在不要为了让 gripper 变 active 再去动 controller 配置。
+
+你下一步只做一件事：**让六轴机械臂运动一次，然后把运动过程中 `/joint_states` 里的 effort 数据发给我。** 如果 effort 已经是非零变化量，我们就可以直接进入 MATLAB 闭环联调。
