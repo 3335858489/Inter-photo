@@ -1,7 +1,613 @@
+我已经把你上传的整个 `dummy_ws.zip` 直接检查了一遍，并按你现在的工程结构重新生成了**只需要覆盖现有目录中文件的版本**。
+
+先说一个关键结论：你记得的红色障碍物文件确实在工程里，但它**不在 `urdf` 文件夹里**。你原工程中：
+
+* `urdf/table.urdf` 是灰色桌子
+* `urdf/target_box.urdf` 是蓝色小方块
+* 真正的红色障碍物在
+  `dummy_ws/src/dummy-ros2_description/models/obstacle_box/model.sdf`
+
+而且原来的 `model.sdf` 实际定义的还是**红色方块**，不是球。
+
+我现在没有新建新的模型文件夹，而是直接复用你原来的：
+
+```text
+models/obstacle_box/
+```
+
+把里面的障碍物改成了和 MATLAB 完全一致的红色球。
+
+你的 MATLAB 参数是：
+
+```matlab
+cfg.obstacle_center = [0.15, -0.05, 0.15];
+cfg.obstacle_radius = 0.03;
+```
+
+所以 Gazebo 中现在会生成：
+
+```text
+红色球
+半径 = 0.03 m
+```
+
+并且考虑了你 `base_link` 相对于 Gazebo world 的 180° 坐标旋转，Gazebo world 中自动放置为：
+
+```text
+x = -0.15
+y =  0.05
+z =  0.15
+```
+
+从物理位置上与 MATLAB 的 `[0.15, -0.05, 0.15]` 对应。
+
+## 重新整理后的替换包
+
+[下载 dummy_ws 需要替换的文件](sandbox:/mnt/data/dummy_ws_required_replacements_v3.zip)
+
+压缩包里面已经保持了你原来的目录结构，你直接看路径覆盖即可。
+
+---
+
+## 这次需要替换的文件
+
+### 1. 机械臂 Xacro
+
+覆盖：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/urdf/dummy-ros2.xacro
+```
+
+这个版本保留你原来所有：
+
+```text
+link
+joint
+mesh
+惯量
+关节限制
+```
+
+并保留我们已经加好的：
+
+```xml
+<state_interface name="effort"/>
+```
+
+另外我这次把 Gazebo 内部位置控制改成了**位置 PID 动力学执行方式**，但外部接口仍然还是：
+
+```xml
+<command_interface name="position">
+```
+
+所以你的：
+
+```text
+/arm_controller/follow_joint_trajectory
+```
+
+和 MATLAB 下发位置轨迹的方法**完全不用改**。
+
+区别只是 Gazebo 内部不再直接硬改关节位置，而是通过 PID 计算作用力矩，因此 `/joint_states.effort` 才有机会得到真正的非零力矩。Gazebo Classic 官方的 `gazebo_ros2_control` 正是通过 position PID 后调用 `SetForce()` 实现这种动力学位置跟踪。([GitHub][1])
+
+---
+
+### 2. 红色障碍物模型
+
+覆盖：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/models/obstacle_box/model.sdf
+```
+
+和：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/models/obstacle_box/model.config
+```
+
+注意：
+
+**文件夹名我没有改。**
+
+仍然是：
+
+```text
+models/obstacle_box/
+```
+
+只是里面的模型从原来的红色 box 改成：
+
+```xml
+<sphere>
+    <radius>0.03</radius>
+</sphere>
+```
+
+所以没有新建任何模型目录。
+
+---
+
+### 3. Gazebo 启动文件
+
+覆盖：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/launch/gazebo.launch.py
+```
+
+我保留了你原来 launch 里的：
+
+```text
+机械臂
+桌子
+蓝色 target_box
+三个控制器
+```
+
+一个都没有删除。
+
+现在只是额外加入：
+
+```text
+MATLAB匹配的红色球
+```
+
+所以启动以后应该同时出现：
+
+```text
+机械臂
+桌子
+蓝色目标小方块
+红色球形障碍物
+```
+
+这样就不会再出现前面那种红色障碍物丢失的问题。
+
+---
+
+## 4. CMakeLists.txt
+
+覆盖：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/CMakeLists.txt
+```
+
+你原来的 CMake 只安装：
+
+```cmake
+meshes
+urdf
+launch
+```
+
+但是你的红色障碍物实际上放在：
+
+```text
+models/
+```
+
+所以原来的 `colcon build` 后，`models` 根本没有被复制到 `install` 目录。
+
+这也是为什么之前 launch 很难稳定找到障碍物模型。
+
+现在改成：
+
+```cmake
+install(
+  DIRECTORY meshes urdf launch models
+  DESTINATION share/${PROJECT_NAME}
+)
+```
+
+所以：
+
+```text
+models/obstacle_box/model.sdf
+```
+
+会正式进入 ROS package 的 install 路径。
+
+---
+
+## 5. package.xml
+
+覆盖：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/package.xml
+```
+
+我没有改变 package 类型，仍然是：
+
+```text
+ament_cmake
+```
+
+只是补充了当前闭环实验真正使用的依赖：
+
+```text
+gazebo_ros
+gazebo_ros2_control
+controller_manager
+joint_trajectory_controller
+joint_state_broadcaster
+rclpy
+std_msgs
+gazebo_msgs
+```
+
+---
+
+## 6. set_obstacle.py
+
+覆盖：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/set_obstacle.py
+```
+
+你原来的这个文件定义的是：
+
+```python
+position = (0.15, 0.05, 0.12)
+BOX
+```
+
+现在改成：
+
+```python
+center = (0.15, -0.05, 0.15)
+radius = 0.03
+SPHERE
+```
+
+并且：
+
+```python
+frame_id = 'base_link'
+```
+
+这样 MoveIt PlanningScene 和 MATLAB 的障碍物也是一致的。
+
+---
+
+## 7. collision_replanner.py
+
+也一起替换：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/collision_replanner.py
+```
+
+原因一样。
+
+你原来的碰撞重规划脚本仍然使用：
+
+```text
+旧位置
+旧方块
+```
+
+如果继续留着，以后某次运行它时又会出现：
+
+```text
+MATLAB是球
+Gazebo是球
+MoveIt脚本还是方块
+```
+
+所以这次我一起统一了。
+
+---
+
+# 唯一新增的文件
+
+我没有新增文件夹，只在你已有的：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/
+```
+
+根目录增加了：
+
+```text
+gazebo_disturbance_bridge_classic.py
+```
+
+最终就是：
+
+```text
+dummy-ros2_description/
+├── gazebo_disturbance_bridge_classic.py
+├── set_obstacle.py
+├── collision_replanner.py
+├── CMakeLists.txt
+├── package.xml
+├── launch/
+├── urdf/
+├── models/
+├── meshes/
+...
+```
+
+不会创建：
+
+```text
+~/ai_dt_gazebo_bridge
+```
+
+这种新的外部文件夹了。
+
+而且新的 `gazebo.launch.py` 会自动启动这个 disturbance bridge，所以以后也不需要你单独再开一个终端启动扰动节点。
+
+---
+
+# 最终你要覆盖的目录非常明确
+
+把压缩包中的：
+
+```text
+dummy_ws/src/dummy-ros2_description/
+```
+
+下面对应文件，覆盖到你 Ubuntu 中：
+
+```text
+~/dummy_ws/src/dummy-ros2_description/
+```
+
+对应关系如下：
+
+```text
+压缩包                                              Ubuntu
+
+dummy_ws/src/dummy-ros2_description/
+│
+├─ CMakeLists.txt
+│  → ~/dummy_ws/src/dummy-ros2_description/CMakeLists.txt
+│
+├─ package.xml
+│  → ~/dummy_ws/src/dummy-ros2_description/package.xml
+│
+├─ set_obstacle.py
+│  → ~/dummy_ws/src/dummy-ros2_description/set_obstacle.py
+│
+├─ collision_replanner.py
+│  → ~/dummy_ws/src/dummy-ros2_description/collision_replanner.py
+│
+├─ gazebo_disturbance_bridge_classic.py
+│  → ~/dummy_ws/src/dummy-ros2_description/gazebo_disturbance_bridge_classic.py
+│
+├─ launch/
+│  └─ gazebo.launch.py
+│     → ~/dummy_ws/src/dummy-ros2_description/launch/gazebo.launch.py
+│
+├─ urdf/
+│  └─ dummy-ros2.xacro
+│     → ~/dummy_ws/src/dummy-ros2_description/urdf/dummy-ros2.xacro
+│
+└─ models/
+   └─ obstacle_box/
+      ├─ model.sdf
+      └─ model.config
+```
+
+其他文件，例如：
+
+```text
+table.urdf
+target_box.urdf
+dummy-ros2.gazebo
+dummy-ros2.trans
+materials.xacro
+meshes
+ros2_controllers.yaml
+moveit_controllers.yaml
+```
+
+**这次都不要改。**
+
+---
+
+# 替换完成以后运行
+
+先彻底关闭 Gazebo。
+
+然后终端 1：
+
+```bash
+cd ~/dummy_ws
+
+colcon build --symlink-install
+
+source /opt/ros/humble/setup.bash
+source ~/dummy_ws/install/setup.bash
+
+export ROS_DOMAIN_ID=0
+
+ros2 launch dummy-ros2_description gazebo.launch.py
+```
+
+等待十几秒。
+
+因为你的原 launch 本来就是延迟生成：
+
+```text
+约5 s：机械臂、桌子
+约6.5 s：红色球
+约8 s：蓝色目标方块
+约10～11.5 s：控制器
+约12 s：扰动桥
+```
+
+---
+
+## 启动后先看 Gazebo 场景
+
+应该有：
+
+```text
+机械臂
+灰色桌子
+蓝色小方块
+红色小球
+```
+
+其中红球是我们论文实验使用的障碍物。
+
+---
+
+# 然后终端 2 检查
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/dummy_ws/install/setup.bash
+export ROS_DOMAIN_ID=0
+```
+
+执行：
+
+```bash
 ros2 control list_controllers
+```
 
+然后：
+
+```bash
 ros2 control list_hardware_interfaces
+```
 
+应该继续有：
+
+```text
+Joint1/effort
+Joint1/position
+Joint1/velocity
+...
+Joint6/effort
+Joint6/position
+Joint6/velocity
+```
+
+---
+
+## 再检查 effort
+
+```bash
+ros2 topic echo /joint_states
+```
+
+这次重点不要只看机械臂完全静止的一瞬间。
+
+让机械臂执行一次归零或小角度运动：
+
+```bash
+ros2 action send_goal \
+/arm_controller/follow_joint_trajectory \
+control_msgs/action/FollowJointTrajectory \
+"{trajectory: {
+  joint_names: [Joint1, Joint2, Joint3, Joint4, Joint5, Joint6],
+  points: [{
+    positions: [0.1, -0.1, 0.1, 0.05, -0.05, 0.05],
+    time_from_start: {sec: 2, nanosec: 0}
+  }]
+}}" \
+--feedback
+```
+
+同时另一个终端：
+
+```bash
+ros2 topic echo /joint_states
+```
+
+现在重点观察：
+
+```text
+effort:
+```
+
+是否已经从：
+
+```text
+0
+0
+0
+0
+0
+0
+```
+
+变成随运动变化的有限值。
+
+如果是，那么：
+
+```text
+Gazebo position PID
+→ joint torque
+→ /joint_states.effort
+```
+
+这一关就真正打通了。
+
+---
+
+## 再检查扰动桥
+
+新的 launch 会自动启动，所以不用手工运行 Python。
+
+执行：
+
+```bash
+ros2 topic list | grep ai_dt
+```
+
+应该看到：
+
+```text
+/ai_dt/disturbance_enable
+/ai_dt/disturbance_status
+```
+
+然后检查：
+
+```bash
+ros2 topic echo /ai_dt/disturbance_status --once
+```
+
+如果正常，就是：
+
+```text
+data: false
+```
+
+这说明 MATLAB 后面可以直接控制 t=5 s 扰动。
+
+---
+
+### 这次我已经按照你真正的 `dummy_ws.zip` 做了，而不是根据之前零散上传的文件猜目录
+
+所以后面就以这个版本为准：
+
+[下载最终替换包](sandbox:/mnt/data/dummy_ws_required_replacements_v3.zip)
+
+你先完成替换、重新编译，然后只需要把两项结果发我：
+
+```bash
 ros2 topic echo /joint_states --once
+```
 
-ros2 action list
+以及机械臂运动过程中：
+
+```bash
+ros2 topic echo /joint_states
+```
+
+看到的 `effort` 数据。
+
+如果 effort 已经变成非零变化量，我们下一步就可以正式进入 **MATLAB Quick 闭环实验**。
+
+[1]: https://github.com/ros-controls/gazebo_ros2_control/blob/master/doc/index.rst?utm_source=chatgpt.com "gazebo_ros2_control/doc/index.rst at master · ros-controls/gazebo_ros2_control · GitHub"
