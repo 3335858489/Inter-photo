@@ -1,221 +1,229 @@
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_error:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
+这次结果是成功的，但它验证的是**轨迹 Action 下发与位置跟踪**，还没有验证到 Gazebo 的关节力矩。
 
-Feedback:
-    header:
-  stamp:
-    sec: 336
-    nanosec: 668000000
-  frame_id: ''
-joint_names:
-- Joint1
-- Joint2
-- Joint3
-- Joint4
-- Joint5
-- Joint6
+你这次看到的：
+
+```text
 desired:
-  positions:
-  - 0.09800039248347212
-  - -0.0980013037585953
-  - 0.098001469102282
-  - 0.0490005491822361
-  - -0.049001209540437
-  - 0.048999450822193
-  velocities:
-  - 0.03332679194213129
-  - -0.03331160402341187
-  - 0.03330884829530009
-  - 0.016657513629398404
-  - -0.016646507659383306
-  - 0.016675819630116648
-  accelerations:
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
   effort: []
-  time_from_start:
-    sec: 2
-    nanosec: 940000000
+
 actual:
-  positions:
-  - 0.09767104387492243
-  - -0.09768704366092251
-  - 0.09775043586277299
-  - 0.048852035631032464
-  - -0.048898045682766456
-  - 0.048814610666543246
-  velocities:
-  - 0.003919310958359022
-  - -0.018855943108341346
-  - 0.08205524346650062
-  - 0.018061585095781218
-  - -0.06330121894009566
-  - -0.0180819594002235
-  accelerations: []
   effort: []
-  time_from_start:
-    sec: 2
-    nanosec: 940000000
+
 error:
-  positions:
-  - 0.00032934860854968995
-  - -0.0003142600976727833
-  - 0.0002510332395090076
-  - 0.00014851355120363424
-  - -0.00010316385767054209
-  - 0.0001848401556497556
-  velocities:
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  accelerations: []
   effort: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_joint_names: []
-multi_dof_desired:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_actual:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_error:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
+```
 
-Feedback:
-    header:
-  stamp:
-    sec: 336
-    nanosec: 718000000
-  frame_id: ''
-joint_names:
-- Joint1
-- Joint2
-- Joint3
-- Joint4
-- Joint5
-- Joint6
-desired:
-  positions:
-  - 0.09966673208057869
-  - -0.0996668839597659
-  - 0.09966691151704701
-  - 0.049833424863706025
-  - -0.04983353492340617
-  - 0.04983324180369884
-  velocities:
-  - 0.03332679194213129
-  - -0.03331160402341187
-  - 0.03330884829530009
-  - 0.016657513629398404
-  - -0.016646507659383306
-  - 0.016675819630116648
-  accelerations:
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  effort: []
-  time_from_start:
-    sec: 2
-    nanosec: 990000000
-actual:
-  positions:
-  - 0.09933743737036238
-  - -0.09935271882211616
-  - 0.09941600124137207
-  - 0.049684612871087275
-  - -0.04973040245572957
-  - 0.04964869985848175
-  velocities:
-  - 0.003973209285947835
-  - -0.018950903099114645
-  - 0.08217820730054318
-  - 0.017763143680651013
-  - -0.06333260893552078
-  - -0.017783748967472344
-  accelerations: []
-  effort: []
-  time_from_start:
-    sec: 2
-    nanosec: 990000000
-error:
-  positions:
-  - 0.0003292947102163102
-  - -0.00031416513764974396
-  - 0.00025091027567494817
-  - 0.00014881199261874978
-  - -0.00010313246767659767
-  - 0.0001845419452170885
-  velocities:
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  accelerations: []
-  effort: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_joint_names: []
-multi_dof_desired:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_actual:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_error:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
+属于 `/arm_controller/follow_joint_trajectory` 的 Action feedback。它为空是正常的，因为你当前 `arm_controller` 的状态反馈配置只有：
 
-Result:
-    error_code: 0
-error_string: Goal successfully reached!
+```yaml
+state_interfaces:
+  - position
+  - velocity
+```
 
+所以**这里的 `effort: []` 不等于 `/joint_states.effort` 没有数据**。这两条链路要分开看。
+
+从这次结果可以确认：
+
+```text
+Goal successfully reached!
 Goal finished with status: SUCCEEDED
-user@user-virtual-machine:~$ 
+```
+
+而且末端时刻的关节位置误差大约只有：
+
+```text
+Joint1 ≈ 0.000329 rad
+Joint2 ≈ 0.000314 rad
+Joint3 ≈ 0.000251 rad
+Joint4 ≈ 0.000149 rad
+Joint5 ≈ 0.000103 rad
+Joint6 ≈ 0.000185 rad
+```
+
+约为 `0.006°～0.019°`，说明目前：
+
+```text
+FollowJointTrajectory
+        ↓
+arm_controller
+        ↓
+Gazebo机械臂
+        ↓
+实际关节运动
+```
+
+这条链路工作正常。
+
+## 现在只做一个测试
+
+不要改代码。
+
+### 终端 2：先持续读取 `/joint_states`
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/dummy_ws/install/setup.bash
+export ROS_DOMAIN_ID=0
+
+ros2 topic echo /joint_states
+```
+
+保持运行。
+
+### 终端 3：再让机械臂做一个时间更长、幅度更大的运动
+
+建议用 5 秒，方便观察：
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/dummy_ws/install/setup.bash
+export ROS_DOMAIN_ID=0
+
+ros2 action send_goal \
+/arm_controller/follow_joint_trajectory \
+control_msgs/action/FollowJointTrajectory \
+"{trajectory: {
+  joint_names: [Joint1, Joint2, Joint3, Joint4, Joint5, Joint6],
+  points: [{
+    positions: [0.30, -0.30, 0.25, 0.20, -0.20, 0.15],
+    time_from_start: {sec: 5, nanosec: 0}
+  }]
+}}" \
+--feedback
+```
+
+然后你**不要把 Action Feedback 发给我**，而是看终端 2 中这种内容：
+
+```yaml
+name:
+- Joint1
+- Joint2
+...
+
+position:
+...
+
+velocity:
+...
+
+effort:
+- ...
+- ...
+- ...
+- ...
+- ...
+- ...
+```
+
+我要看的就是最后这六个 `effort`。
+
+---
+
+## 可能出现三种结果
+
+### 情况 A：effort 是非零变化值
+
+比如：
+
+```yaml
+effort:
+- 0.182
+- -0.536
+- 0.247
+- 0.061
+- -0.043
+- 0.018
+```
+
+并且运动过程中持续变化。
+
+这就是最理想的结果。
+
+那么 Gazebo 侧就已经满足：
+
+$$
+q_{\mathrm{GZ}},\quad
+\dot q_{\mathrm{GZ}},\quad
+\tau_{\mathrm{GZ}}
+$$
+
+全部可以反馈给 MATLAB。
+
+下一步直接开始 MATLAB-Gazebo 闭环联调。
+
+---
+
+### 情况 B：还是全部 0
+
+比如：
+
+```yaml
+effort:
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+```
+
+那就说明目前：
+
+```text
+effort interface      已经注册 ✓
+位置轨迹控制          正常 ✓
+Gazebo实际力矩反馈    仍未产生 ✗
+```
+
+这时我们才需要改下一版 Xacro，让 Gazebo 通过真正的力矩型位置闭环执行，而不是现在的直接 position mode。
+
+并且这次只改这一层，不再碰红球、launch、controller_manager。
+
+---
+
+### 情况 C：出现 `.nan`
+
+也直接把 `/joint_states` 的完整一帧发我。
+
+---
+
+## 一个容易混淆的地方
+
+你现在其实存在两类反馈：
+
+```text
+/arm_controller/follow_joint_trajectory feedback
+```
+
+主要用于：
+
+```text
+desired position
+actual position
+position error
+```
+
+而论文闭环模型更新真正需要的是：
+
+```text
+/joint_states
+```
+
+中的：
+
+```text
+position
+velocity
+effort
+```
+
+所以 MATLAB 后面也应该主要从 `/joint_states` 获取：
+
+$$
+q,\dot q,\tau
+$$
+
+而不是依赖 Action feedback 中的 `effort`。
+
+因此你这一次实验**已经证明轨迹发送成功，而且跟踪精度很好**。现在就差把运动过程中的 `/joint_states.effort` 发给我。
