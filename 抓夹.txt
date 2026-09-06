@@ -1,172 +1,221 @@
-现在这一步已经恢复正常了，而且关键链路都起来了。
+  time_from_start:
+    sec: 0
+    nanosec: 0
+multi_dof_error:
+  transforms: []
+  velocities: []
+  accelerations: []
+  time_from_start:
+    sec: 0
+    nanosec: 0
 
-从你这三段输出可以确认：
+Feedback:
+    header:
+  stamp:
+    sec: 336
+    nanosec: 668000000
+  frame_id: ''
+joint_names:
+- Joint1
+- Joint2
+- Joint3
+- Joint4
+- Joint5
+- Joint6
+desired:
+  positions:
+  - 0.09800039248347212
+  - -0.0980013037585953
+  - 0.098001469102282
+  - 0.0490005491822361
+  - -0.049001209540437
+  - 0.048999450822193
+  velocities:
+  - 0.03332679194213129
+  - -0.03331160402341187
+  - 0.03330884829530009
+  - 0.016657513629398404
+  - -0.016646507659383306
+  - 0.016675819630116648
+  accelerations:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  effort: []
+  time_from_start:
+    sec: 2
+    nanosec: 940000000
+actual:
+  positions:
+  - 0.09767104387492243
+  - -0.09768704366092251
+  - 0.09775043586277299
+  - 0.048852035631032464
+  - -0.048898045682766456
+  - 0.048814610666543246
+  velocities:
+  - 0.003919310958359022
+  - -0.018855943108341346
+  - 0.08205524346650062
+  - 0.018061585095781218
+  - -0.06330121894009566
+  - -0.0180819594002235
+  accelerations: []
+  effort: []
+  time_from_start:
+    sec: 2
+    nanosec: 940000000
+error:
+  positions:
+  - 0.00032934860854968995
+  - -0.0003142600976727833
+  - 0.0002510332395090076
+  - 0.00014851355120363424
+  - -0.00010316385767054209
+  - 0.0001848401556497556
+  velocities:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  accelerations: []
+  effort: []
+  time_from_start:
+    sec: 0
+    nanosec: 0
+multi_dof_joint_names: []
+multi_dof_desired:
+  transforms: []
+  velocities: []
+  accelerations: []
+  time_from_start:
+    sec: 0
+    nanosec: 0
+multi_dof_actual:
+  transforms: []
+  velocities: []
+  accelerations: []
+  time_from_start:
+    sec: 0
+    nanosec: 0
+multi_dof_error:
+  transforms: []
+  velocities: []
+  accelerations: []
+  time_from_start:
+    sec: 0
+    nanosec: 0
 
-* `/controller_manager` 已正常存在
-* `joint_state_broadcaster` 是 active
-* `arm_controller` 是 active
-* Joint1～Joint6 的 `effort` state interface 已经全部注册
-* `gripper_controller` inactive 不影响我们当前六轴机械臂闭环实验，可以暂时不管
+Feedback:
+    header:
+  stamp:
+    sec: 336
+    nanosec: 718000000
+  frame_id: ''
+joint_names:
+- Joint1
+- Joint2
+- Joint3
+- Joint4
+- Joint5
+- Joint6
+desired:
+  positions:
+  - 0.09966673208057869
+  - -0.0996668839597659
+  - 0.09966691151704701
+  - 0.049833424863706025
+  - -0.04983353492340617
+  - 0.04983324180369884
+  velocities:
+  - 0.03332679194213129
+  - -0.03331160402341187
+  - 0.03330884829530009
+  - 0.016657513629398404
+  - -0.016646507659383306
+  - 0.016675819630116648
+  accelerations:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  effort: []
+  time_from_start:
+    sec: 2
+    nanosec: 990000000
+actual:
+  positions:
+  - 0.09933743737036238
+  - -0.09935271882211616
+  - 0.09941600124137207
+  - 0.049684612871087275
+  - -0.04973040245572957
+  - 0.04964869985848175
+  velocities:
+  - 0.003973209285947835
+  - -0.018950903099114645
+  - 0.08217820730054318
+  - 0.017763143680651013
+  - -0.06333260893552078
+  - -0.017783748967472344
+  accelerations: []
+  effort: []
+  time_from_start:
+    sec: 2
+    nanosec: 990000000
+error:
+  positions:
+  - 0.0003292947102163102
+  - -0.00031416513764974396
+  - 0.00025091027567494817
+  - 0.00014881199261874978
+  - -0.00010313246767659767
+  - 0.0001845419452170885
+  velocities:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  accelerations: []
+  effort: []
+  time_from_start:
+    sec: 0
+    nanosec: 0
+multi_dof_joint_names: []
+multi_dof_desired:
+  transforms: []
+  velocities: []
+  accelerations: []
+  time_from_start:
+    sec: 0
+    nanosec: 0
+multi_dof_actual:
+  transforms: []
+  velocities: []
+  accelerations: []
+  time_from_start:
+    sec: 0
+    nanosec: 0
+multi_dof_error:
+  transforms: []
+  velocities: []
+  accelerations: []
+  time_from_start:
+    sec: 0
+    nanosec: 0
 
-也就是说，目前 Gazebo 侧已经恢复到：
+Result:
+    error_code: 0
+error_string: Goal successfully reached!
 
-```text
-MATLAB / ROS 2
-    ↓
-arm_controller
-    ↓
-Joint1~Joint6 position command
-    ↓
-Gazebo
-    ↓
-position
-velocity
-effort interface
-```
-
-现在只差最后一个关键验证：
-
-> `/joint_states.effort` 到底是不是有效的非零动态数据。
-
-## 你现在直接做下面这个测试
-
-### 终端 2：持续看反馈
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/dummy_ws/install/setup.bash
-export ROS_DOMAIN_ID=0
-
-ros2 topic echo /joint_states
-```
-
-保持这个终端一直显示。
-
-然后新开一个终端 3，发一个小幅度轨迹：
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/dummy_ws/install/setup.bash
-export ROS_DOMAIN_ID=0
-
-ros2 action send_goal \
-/arm_controller/follow_joint_trajectory \
-control_msgs/action/FollowJointTrajectory \
-"{trajectory: {
-  joint_names: [Joint1, Joint2, Joint3, Joint4, Joint5, Joint6],
-  points: [{
-    positions: [0.10, -0.10, 0.10, 0.05, -0.05, 0.05],
-    time_from_start: {sec: 3, nanosec: 0}
-  }]
-}}" \
---feedback
-```
-
-然后看终端 2 里的：
-
-```text
-effort:
-```
-
-### 我们希望看到的是
-
-类似：
-
-```text
-effort:
-- 0.14
-- -0.32
-- 0.21
-- 0.06
-- -0.03
-- 0.01
-```
-
-而且这些数值在机械臂运动过程中会变化。
-
-如果是这样，那么：
-
-```text
-Gazebo
-→ joint effort
-→ /joint_states
-→ MATLAB
-```
-
-这条力矩反馈链已经彻底打通。
-
----
-
-## 如果还是全 0
-
-比如：
-
-```text
-effort:
-- 0.0
-- 0.0
-- 0.0
-- 0.0
-- 0.0
-- 0.0
-```
-
-那说明现在只是：
-
-```text
-effort interface 已注册
-```
-
-但 Gazebo 当前的直接 position 模式没有真正产生可读执行力矩。
-
-这种情况下下一步再单独处理 position PID，不再碰：
-
-```text
-launch
-controller_manager
-红球
-package.xml
-```
-
-只改最小范围。
-
----
-
-## 如果出现 `.nan`
-
-如果重新变成：
-
-```text
-effort:
-- .nan
-...
-```
-
-那也不要继续改文件，把运动时的完整 `/joint_states` 输出发我，我再判断。
-
----
-
-### 现在你不用管 gripper_controller
-
-你当前看到：
-
-```text
-gripper_controller inactive
-```
-
-完全没关系。
-
-我们的闭环实验只需要：
-
-```text
-Joint1
-Joint2
-Joint3
-Joint4
-Joint5
-Joint6
-```
-
-所以现在不要为了让 gripper 变 active 再去动 controller 配置。
-
-你下一步只做一件事：**让六轴机械臂运动一次，然后把运动过程中 `/joint_states` 里的 effort 数据发给我。** 如果 effort 已经是非零变化量，我们就可以直接进入 MATLAB 闭环联调。
+Goal finished with status: SUCCEEDED
+user@user-virtual-machine:~$ 
