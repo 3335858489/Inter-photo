@@ -1,432 +1,163 @@
-user@user-virtual-machine:~$ cd ~/dummy_ws
-colcon build                          # 仅首次或改过代码时需要
-source install/setup.bash
+从你这次的数据看，**机械臂实际上已经运动了**，只是你连续两次目标之间的变化太小，所以视觉上不明显。
+
+你第一次 MATLAB 读到：
+
+```text
+q = [0.05 -0.05 0.05 0.03 -0.03 0.03]
+```
+
+第二次已经变成：
+
+```text
+q = [0.10 -0.10 0.10 0.05 -0.05 0.05]
+```
+
+也就是说它确实从第一组姿态运动到了第二组姿态。你提供的 Gazebo Action 日志中，末段实际位置也从约 `0.0957 rad` 连续变化到 `0.0997 rad`，同时实际速度明显非零，说明机械臂正在执行轨迹。 最终 Action 也返回 `Goal successfully reached`。
+
+你感觉不明显，是因为第二次实际上只比第一次多运动了：
+
+```text
+0.10 - 0.05 = 0.05 rad ≈ 2.86°
+```
+
+这在 Gazebo 里确实很难肉眼观察。
+
+现在还有一个更关键的问题：**你目前 MATLAB 看到的 effort=0 是机械臂已经运动完、静止以后采到的值，不能说明运动过程中也为 0。** 你的 `dq=0` 已经说明这 5 帧是在停止之后读到的。
+
+所以现在不要运行完整的：
+
+```matlab
+results_gz = run_gazebo_closed_loop_case('quick');
+```
+
+先做一次明确的动态测试。
+
+### 第一步，先让机械臂回零
+
+Ubuntu 终端：
+
+```bash
 source /opt/ros/humble/setup.bash
-ros2 launch dummy-ros2_description gazebo.launch.py
-Starting >>> dummy-ros2_description
-Starting >>> dummy_grasping
-Starting >>> simulink_motor_controller
-Finished <<< dummy_grasping [0.32s]                                          
-Finished <<< dummy-ros2_description [0.34s]
-Starting >>> dummy_moveit_config
-Finished <<< dummy_moveit_config [0.15s]                                
-Finished <<< simulink_motor_controller [0.86s]          
+source ~/dummy_ws/install/setup.bash
+export ROS_DOMAIN_ID=0
+```
 
-Summary: 4 packages finished [1.27s]
-[INFO] [launch]: All log files can be found below /home/user/.ros/log/2026-09-06-17-58-39-543111-user-virtual-machine-28823
-[INFO] [launch]: Default logging verbosity is set to INFO
-[INFO] [robot_state_publisher-1]: process started with pid [28825]
-[INFO] [gzserver-2]: process started with pid [28827]
-[INFO] [gzclient-3]: process started with pid [28829]
-[robot_state_publisher-1] [INFO] [1788688720.140421043] [robot_state_publisher]: got segment base_link
-[robot_state_publisher-1] [INFO] [1788688720.140573170] [robot_state_publisher]: got segment link1_1_1
-[robot_state_publisher-1] [INFO] [1788688720.140582638] [robot_state_publisher]: got segment link2_1_1
-[robot_state_publisher-1] [INFO] [1788688720.140586906] [robot_state_publisher]: got segment link3_1_1
-[robot_state_publisher-1] [INFO] [1788688720.140590653] [robot_state_publisher]: got segment link4_1_1
-[robot_state_publisher-1] [INFO] [1788688720.140594200] [robot_state_publisher]: got segment link5_1_1
-[robot_state_publisher-1] [INFO] [1788688720.140597957] [robot_state_publisher]: got segment link6_1_1
-[robot_state_publisher-1] [INFO] [1788688720.140601734] [robot_state_publisher]: got segment world
-[robot_state_publisher-1] sequence size exceeds remaining buffer
-[gzserver-2] sequence size exceeds remaining buffer
-[gzclient-3] context mismatch in svga_surface_destroy
-[gzclient-3] context mismatch in svga_surface_destroy
-[gzclient-3] 
-[gzclient-3] (gzclient:28829): GLib-GIO-CRITICAL **: 17:58:43.712: g_dbus_proxy_new: assertion 'G_IS_DBUS_CONNECTION (connection)' failed
-[gzclient-3] 
-[gzclient-3] (gzclient:28829): GLib-GIO-CRITICAL **: 17:58:43.712: g_dbus_proxy_new: assertion 'G_IS_DBUS_CONNECTION (connection)' failed
-[gzclient-3] 
-[gzclient-3] (gzclient:28829): GLib-GIO-CRITICAL **: 17:58:43.713: g_dbus_proxy_new: assertion 'G_IS_DBUS_CONNECTION (connection)' failed
-[gzclient-3] 
-[gzclient-3] (gzclient:28829): GLib-GIO-CRITICAL **: 17:58:43.713: g_dbus_proxy_new: assertion 'G_IS_DBUS_CONNECTION (connection)' failed
-[gzclient-3] 
-[gzclient-3] (gzclient:28829): GLib-GIO-CRITICAL **: 17:58:43.713: g_dbus_proxy_new: assertion 'G_IS_DBUS_CONNECTION (connection)' failed
-[INFO] [spawn_entity.py-4]: process started with pid [28936]
-[INFO] [spawn_entity.py-5]: process started with pid [28938]
-[spawn_entity.py-5] sequence size exceeds remaining buffer
-[spawn_entity.py-4] sequence size exceeds remaining buffer
-[spawn_entity.py-5] [INFO] [1788688725.628246420] [spawn_entity]: Spawn Entity started
-[spawn_entity.py-4] [INFO] [1788688725.628711226] [spawn_entity]: Spawn Entity started
-[spawn_entity.py-4] [INFO] [1788688725.629262516] [spawn_entity]: Loading entity published on topic robot_description
-[spawn_entity.py-5] [INFO] [1788688725.628820803] [spawn_entity]: Loading entity XML from file /home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/urdf/table.urdf
-[spawn_entity.py-5] Traceback (most recent call last):
-[spawn_entity.py-5]   File "/opt/ros/humble/lib/gazebo_ros/spawn_entity.py", line 372, in <module>
-[spawn_entity.py-5]     main()
-[spawn_entity.py-5]   File "/opt/ros/humble/lib/gazebo_ros/spawn_entity.py", line 367, in main
-[spawn_entity.py-5]     exit_code = spawn_entity_node.run()
-[spawn_entity.py-5]   File "/opt/ros/humble/lib/gazebo_ros/spawn_entity.py", line 143, in run
-[spawn_entity.py-5]     self.get_logger().error('Error: specified file %s does not exist', self.args.file)
-[spawn_entity.py-5] TypeError: RcutilsLogger.error() takes 2 positional arguments but 3 were given
-[spawn_entity.py-4] [INFO] [1788688725.633189522] [spawn_entity]: Waiting for entity xml on robot_description
-[spawn_entity.py-4] [INFO] [1788688725.645155108] [spawn_entity]: Waiting for service /spawn_entity, timeout = 30
-[spawn_entity.py-4] [INFO] [1788688725.645561895] [spawn_entity]: Waiting for service /spawn_entity
-[spawn_entity.py-4] [INFO] [1788688725.658979730] [spawn_entity]: Calling service /spawn_entity
-[ERROR] [spawn_entity.py-5]: process has died [pid 28938, exit code 1, cmd '/opt/ros/humble/lib/gazebo_ros/spawn_entity.py -entity simple_table -file /home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/urdf/table.urdf -x 0.40 -y 0.0 -z 0.0 --ros-args'].
-[spawn_entity.py-4] [INFO] [1788688725.851991345] [spawn_entity]: Spawn status: SpawnEntity: Successfully spawned entity [dummy-ros2]
-[gzserver-2] [INFO] [1788688725.944698901] [gazebo_ros2_control]: Loading gazebo_ros2_control plugin
-[gzserver-2] [INFO] [1788688725.954367870] [gazebo_ros2_control]: Starting gazebo_ros2_control plugin in namespace: /
-[gzserver-2] [INFO] [1788688725.954628251] [gazebo_ros2_control]: Starting gazebo_ros2_control plugin in ros 2 node: gazebo_ros2_control
-[gzserver-2] [INFO] [1788688725.963925184] [gazebo_ros2_control]: connected to service!! robot_state_publisher
-[gzserver-2] [INFO] [1788688725.966994072] [gazebo_ros2_control]: Received urdf from param server, parsing...
-[gzserver-2] [INFO] [1788688725.967095112] [gazebo_ros2_control]: Loading parameter files /home/user/dummy_ws/install/dummy_moveit_config/share/dummy_moveit_config/config/ros2_controllers.yaml
-[gzserver-2] [INFO] [1788688725.978343496] [gazebo_ros2_control]: Loading joint: Joint1
-[gzserver-2] [INFO] [1788688725.978434567] [gazebo_ros2_control]: 	State:
-[gzserver-2] [INFO] [1788688725.978445127] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978451359] [gazebo_ros2_control]: 		 velocity
-[gzserver-2] [INFO] [1788688725.978456328] [gazebo_ros2_control]: 		 effort
-[gzserver-2] [INFO] [1788688725.978460817] [gazebo_ros2_control]: 	Command:
-[gzserver-2] [INFO] [1788688725.978465185] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978493098] [gazebo_ros2_control]: Setting kp = 60	 ki = 0	 kd = 3	 max_integral_error = 2	antiwindup =false
-[gzserver-2] [INFO] [1788688725.978509629] [gazebo_ros2_control]: Found position PIDs for joint: Joint1!
-[gzserver-2] [INFO] [1788688725.978552239] [gazebo_ros2_control]: Loading joint: Joint2
-[gzserver-2] [INFO] [1788688725.978557609] [gazebo_ros2_control]: 	State:
-[gzserver-2] [INFO] [1788688725.978562128] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978566516] [gazebo_ros2_control]: 		 velocity
-[gzserver-2] [INFO] [1788688725.978571285] [gazebo_ros2_control]: 		 effort
-[gzserver-2] [INFO] [1788688725.978575734] [gazebo_ros2_control]: 	Command:
-[gzserver-2] [INFO] [1788688725.978580102] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978587245] [gazebo_ros2_control]: Setting kp = 90	 ki = 0	 kd = 5	 max_integral_error = 2	antiwindup =false
-[gzserver-2] [INFO] [1788688725.978592064] [gazebo_ros2_control]: Found position PIDs for joint: Joint2!
-[gzserver-2] [INFO] [1788688725.978601122] [gazebo_ros2_control]: Loading joint: Joint3
-[gzserver-2] [INFO] [1788688725.978605840] [gazebo_ros2_control]: 	State:
-[gzserver-2] [INFO] [1788688725.978610579] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978615288] [gazebo_ros2_control]: 		 velocity
-[gzserver-2] [INFO] [1788688725.978619536] [gazebo_ros2_control]: 		 effort
-[gzserver-2] [INFO] [1788688725.978624616] [gazebo_ros2_control]: 	Command:
-[gzserver-2] [INFO] [1788688725.978628824] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978635166] [gazebo_ros2_control]: Setting kp = 75	 ki = 0	 kd = 4	 max_integral_error = 2	antiwindup =false
-[gzserver-2] [INFO] [1788688725.978639955] [gazebo_ros2_control]: Found position PIDs for joint: Joint3!
-[gzserver-2] [INFO] [1788688725.978647539] [gazebo_ros2_control]: Loading joint: Joint4
-[gzserver-2] [INFO] [1788688725.978652158] [gazebo_ros2_control]: 	State:
-[gzserver-2] [INFO] [1788688725.978656566] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978660794] [gazebo_ros2_control]: 		 velocity
-[gzserver-2] [INFO] [1788688725.978665002] [gazebo_ros2_control]: 		 effort
-[gzserver-2] [INFO] [1788688725.978669200] [gazebo_ros2_control]: 	Command:
-[gzserver-2] [INFO] [1788688725.978673328] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978680271] [gazebo_ros2_control]: Setting kp = 45	 ki = 0	 kd = 2.5	 max_integral_error = 1.5	antiwindup =false
-[gzserver-2] [INFO] [1788688725.978684930] [gazebo_ros2_control]: Found position PIDs for joint: Joint4!
-[gzserver-2] [INFO] [1788688725.978696281] [gazebo_ros2_control]: Loading joint: Joint5
-[gzserver-2] [INFO] [1788688725.978700749] [gazebo_ros2_control]: 	State:
-[gzserver-2] [INFO] [1788688725.978705017] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978709676] [gazebo_ros2_control]: 		 velocity
-[gzserver-2] [INFO] [1788688725.978714295] [gazebo_ros2_control]: 		 effort
-[gzserver-2] [INFO] [1788688725.978718383] [gazebo_ros2_control]: 	Command:
-[gzserver-2] [INFO] [1788688725.978722541] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978729664] [gazebo_ros2_control]: Setting kp = 30	 ki = 0	 kd = 1.8	 max_integral_error = 1	antiwindup =false
-[gzserver-2] [INFO] [1788688725.978734273] [gazebo_ros2_control]: Found position PIDs for joint: Joint5!
-[gzserver-2] [INFO] [1788688725.978741667] [gazebo_ros2_control]: Loading joint: Joint6
-[gzserver-2] [INFO] [1788688725.978778366] [gazebo_ros2_control]: 	State:
-[gzserver-2] [INFO] [1788688725.978784447] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978789066] [gazebo_ros2_control]: 		 velocity
-[gzserver-2] [INFO] [1788688725.978794366] [gazebo_ros2_control]: 		 effort
-[gzserver-2] [INFO] [1788688725.978798664] [gazebo_ros2_control]: 	Command:
-[gzserver-2] [INFO] [1788688725.978802982] [gazebo_ros2_control]: 		 position
-[gzserver-2] [INFO] [1788688725.978810687] [gazebo_ros2_control]: Setting kp = 20	 ki = 0	 kd = 1.2	 max_integral_error = 1	antiwindup =false
-[gzserver-2] [INFO] [1788688725.978815526] [gazebo_ros2_control]: Found position PIDs for joint: Joint6!
-[gzserver-2] [INFO] [1788688725.978859930] [resource_manager]: Initialize hardware 'GazeboSystem' 
-[gzserver-2] [INFO] [1788688725.979103299] [resource_manager]: Successful initialization of hardware 'GazeboSystem'
-[gzserver-2] [INFO] [1788688725.979180404] [resource_manager]: 'configure' hardware 'GazeboSystem' 
-[gzserver-2] [INFO] [1788688725.979187738] [resource_manager]: Successful 'configure' of hardware 'GazeboSystem'
-[gzserver-2] [INFO] [1788688725.979193328] [resource_manager]: 'activate' hardware 'GazeboSystem' 
-[gzserver-2] [INFO] [1788688725.979197636] [resource_manager]: Successful 'activate' of hardware 'GazeboSystem'
-[gzserver-2] [INFO] [1788688725.979260826] [gazebo_ros2_control]: Loading controller_manager
-[INFO] [spawn_entity.py-4]: process has finished cleanly [pid 28936]
-[INFO] [spawn_entity.py-6]: process started with pid [28972]
-[spawn_entity.py-6] [INFO] [1788688727.232708820] [spawn_entity]: Spawn Entity started
-[spawn_entity.py-6] [INFO] [1788688727.233308050] [spawn_entity]: Loading entity XML from file /home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/models/obstacle_box/model.sdf
-[spawn_entity.py-6] [INFO] [1788688727.234531327] [spawn_entity]: Waiting for service /spawn_entity, timeout = 30
-[spawn_entity.py-6] [INFO] [1788688727.234822816] [spawn_entity]: Waiting for service /spawn_entity
-[spawn_entity.py-6] sequence size exceeds remaining buffer
-[INFO] [spawn_entity.py-7]: process started with pid [28991]
-[gzserver-2] [WARN] [1788688728.467360653] [gazebo_ros2_control]:  Desired controller update period (0.01 s) is slower than the gazebo simulation period (0.001 s).
-[gzserver-2] [INFO] [1788688728.467931699] [gazebo_ros2_control]: Loaded gazebo_ros2_control.
-[gzserver-2] [INFO] [1788688728.492869456] [controller_manager]: Loading controller 'joint_state_broadcaster'
-[spawn_entity.py-7] [INFO] [1788688728.492948689] [spawn_entity]: Spawn Entity started
-[spawn_entity.py-7] [INFO] [1788688728.493462478] [spawn_entity]: Loading entity XML from file /home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/urdf/target_box.urdf
-[spawn_entity.py-6] [INFO] [1788688728.493554045] [spawn_entity]: Calling service /spawn_entity
-[spawn_entity.py-7] Traceback (most recent call last):
-[spawn_entity.py-7]   File "/opt/ros/humble/lib/gazebo_ros/spawn_entity.py", line 372, in <module>
-[spawn_entity.py-7]     main()
-[spawn_entity.py-7]   File "/opt/ros/humble/lib/gazebo_ros/spawn_entity.py", line 367, in main
-[spawn_entity.py-7]     exit_code = spawn_entity_node.run()
-[spawn_entity.py-7]   File "/opt/ros/humble/lib/gazebo_ros/spawn_entity.py", line 143, in run
-[spawn_entity.py-7]     self.get_logger().error('Error: specified file %s does not exist', self.args.file)
-[spawn_entity.py-7] TypeError: RcutilsLogger.error() takes 2 positional arguments but 3 were given
-[spawn_entity.py-7] sequence size exceeds remaining buffer
-[gzserver-2] [INFO] [1788688728.544003553] [controller_manager]: Configuring controller 'joint_state_broadcaster'
-[gzserver-2] [INFO] [1788688728.544460294] [joint_state_broadcaster]: 'joints' or 'interfaces' parameter is empty. All available state interfaces will be published
-[ERROR] [spawn_entity.py-7]: process has died [pid 28991, exit code 1, cmd '/opt/ros/humble/lib/gazebo_ros/spawn_entity.py -entity target_box -file /home/user/dummy_ws/install/dummy-ros2_description/share/dummy-ros2_description/urdf/target_box.urdf -x 0.40 -y 0.0 -z 0.22 --ros-args'].
-[spawn_entity.py-6] [INFO] [1788688728.695297156] [spawn_entity]: Spawn status: SpawnEntity: Successfully spawned entity [obstacle_box]
-[INFO] [spawn_entity.py-6]: process has finished cleanly [pid 28972]
-[gzserver-2] [INFO] [1788688729.949712868] [controller_manager]: Loading controller 'arm_controller'
-[gzserver-2] [WARN] [1788688729.981536514] [arm_controller]: [Deprecated]: "allow_nonzero_velocity_at_trajectory_end" is set to true. The default behavior will change to false.
-[gzserver-2] [INFO] [1788688729.990611729] [controller_manager]: Configuring controller 'arm_controller'
-[gzserver-2] [INFO] [1788688729.990840310] [arm_controller]: No specific joint names are used for command interfaces. Using 'joints' parameter.
-[gzserver-2] [INFO] [1788688729.990887809] [arm_controller]: Command interfaces are [position] and state interfaces are [position velocity].
-[gzserver-2] [INFO] [1788688729.991260923] [arm_controller]: Using 'splines' interpolation method.
-[gzserver-2] [INFO] [1788688729.994177944] [arm_controller]: Controller state will be published at 50.00 Hz.
-[gzserver-2] [INFO] [1788688729.998192495] [arm_controller]: Action status changes will be monitored at 20.00 Hz.
-[INFO] [spawner-8]: process started with pid [29035]
-[spawner-8] [INFO] [1788688730.701852807] [spawner_joint_state_broadcaster]: waiting for service /controller_manager/list_controllers to become available...
-[spawner-8] sequence size exceeds remaining buffer
-[INFO] [spawner-9]: process started with pid [29053]
-[spawner-8] [WARN] [1788688731.456136223] [spawner_joint_state_broadcaster]: Controller already loaded, skipping load_controller
-[gzserver-2] [INFO] [1788688731.461836994] [controller_manager]: Configuring controller 'joint_state_broadcaster'
-[gzserver-2] [ERROR] [1788688731.461894623] [controller_manager]: Controller 'joint_state_broadcaster' can not be configured from 'active' state.
-[spawner-8] [ERROR] [1788688731.463047836] [spawner_joint_state_broadcaster]: Failed to configure controller
-[INFO] [spawner-10]: process started with pid [29067]
-[ERROR] [spawner-8]: process has died [pid 29035, exit code 1, cmd '/opt/ros/humble/lib/controller_manager/spawner joint_state_broadcaster --ros-args'].
-[spawner-9] sequence size exceeds remaining buffer
-[spawner-10] sequence size exceeds remaining buffer
-[spawner-9] [WARN] [1788688731.962704526] [spawner_arm_controller]: Controller already loaded, skipping load_controller
-[gzserver-2] [INFO] [1788688731.968078720] [controller_manager]: Configuring controller 'arm_controller'
-[gzserver-2] [ERROR] [1788688731.968126921] [controller_manager]: Controller 'arm_controller' can not be configured from 'active' state.
-[spawner-9] [ERROR] [1788688731.969333492] [spawner_arm_controller]: Failed to configure controller
-[gzserver-2] [INFO] [1788688732.028146657] [controller_manager]: Loading controller 'gripper_controller'
-[gzserver-2] [WARN] [1788688732.055444889] [gripper_controller]: [Deprecated]: "allow_nonzero_velocity_at_trajectory_end" is set to true. The default behavior will change to false.
-[spawner-10] [INFO] [1788688732.099545818] [spawner_gripper_controller]: Loaded gripper_controller
-[ERROR] [spawner-9]: process has died [pid 29053, exit code 1, cmd '/opt/ros/humble/lib/controller_manager/spawner arm_controller --ros-args'].
-[gzserver-2] [INFO] [1788688732.186536393] [controller_manager]: Configuring controller 'gripper_controller'
-[gzserver-2] [INFO] [1788688732.186668322] [gripper_controller]: No specific joint names are used for command interfaces. Using 'joints' parameter.
-[gzserver-2] [INFO] [1788688732.186683510] [gripper_controller]: Command interfaces are [position] and state interfaces are [position velocity].
-[gzserver-2] [INFO] [1788688732.186692337] [gripper_controller]: Using 'splines' interpolation method.
-[gzserver-2] [INFO] [1788688732.188037263] [gripper_controller]: Controller state will be published at 50.00 Hz.
-[gzserver-2] [INFO] [1788688732.191087706] [gripper_controller]: Action status changes will be monitored at 20.00 Hz.
-[gzserver-2] [ERROR] [1788688732.203903355] [resource_manager]: Not acceptable command interfaces combination: 
-[gzserver-2] Start interfaces: 
-[gzserver-2] [
-[gzserver-2]   finger_joint1/position
-[gzserver-2] ]
-[gzserver-2] Stop interfaces: 
-[gzserver-2] [
-[gzserver-2] ]
-[gzserver-2] Not existing: 
-[gzserver-2] [
-[gzserver-2]  finger_joint1/position
-[gzserver-2] ]
-[gzserver-2] 
-[gzserver-2] [ERROR] [1788688732.203983196] [controller_manager]: Could not switch controllers since prepare command mode switch was rejected.
-[spawner-10] [ERROR] [1788688732.206228941] [spawner_gripper_controller]: Failed to activate controller : gripper_controller
-[ERROR] [spawner-10]: process has died [pid 29067, exit code 1, cmd '/opt/ros/humble/lib/controller_manager/spawner gripper_controller --ros-args'].
-[gzserver-2] [INFO] [1788688733.624048284] [arm_controller]: Received new action goal
-[gzserver-2] [INFO] [1788688733.624192666] [arm_controller]: Accepted new action goal
-[gzserver-2] [INFO] [1788688735.633422969] [arm_controller]: Goal reached, success!
-[gzserver-2] [INFO] [1788688908.945481657] [arm_controller]: Received new action goal
-[gzserver-2] [INFO] [1788688908.945563562] [arm_controller]: Accepted new action goal
-[gzserver-2] [INFO] [1788688913.955868379] [arm_controller]: Goal reached, success!
+发送：
 
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
+```bash
+ros2 action send_goal \
+/arm_controller/follow_joint_trajectory \
+control_msgs/action/FollowJointTrajectory \
+"{trajectory: {
+  joint_names: [Joint1, Joint2, Joint3, Joint4, Joint5, Joint6],
+  points: [{
+    positions: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    time_from_start: {sec: 5, nanosec: 0}
+  }]
+}}" \
+--feedback
+```
 
-Feedback:
-    header:
-  stamp:
-    sec: 182
-    nanosec: 364000000
-  frame_id: ''
-joint_names:
-- Joint1
-- Joint2
-- Joint3
-- Joint4
-- Joint5
-- Joint6
-desired:
-  positions:
-  - 0.29662564693238874
-  - -0.2962277318972031
-  - 0.24681976859897276
-  - 0.19788368846634133
-  - -0.2039784398816462
-  - 0.1477289216574602
-  velocities:
-  - 0.05623921779352091
-  - -0.06287113504661533
-  - 0.05300385668378773
-  - 0.03527185889431156
-  - 0.06630733136077044
-  - 0.03785130570899685
-  accelerations:
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  effort: []
-  time_from_start:
-    sec: 4
-    nanosec: 940000000
+等它执行完。
+
+### 第二步，专门记录 Gazebo 物理层反馈
+
+新开一个 Ubuntu 终端：
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/dummy_ws/install/setup.bash
+export ROS_DOMAIN_ID=0
+```
+
+执行：
+
+```bash
+timeout 12s ros2 topic echo /ai_dt/joint_states_physics > ~/ai_dt_motion_feedback.txt
+```
+
+这个终端会连续记录 12 秒。
+
+### 第三步，立刻在另一个终端发一个明显的动作
+
+这次主要动 Joint2、Joint3，视觉上比六个关节各动 0.05 rad 明显很多：
+
+```bash
+ros2 action send_goal \
+/arm_controller/follow_joint_trajectory \
+control_msgs/action/FollowJointTrajectory \
+"{trajectory: {
+  joint_names: [Joint1, Joint2, Joint3, Joint4, Joint5, Joint6],
+  points: [{
+    positions: [0.0, -0.20, 0.15, 0.0, 0.0, 0.0],
+    time_from_start: {sec: 8, nanosec: 0}
+  }]
+}}" \
+--feedback
+```
+
+这里：
+
+```text
+Joint2 = -0.20 rad ≈ -11.46°
+Joint3 =  0.15 rad ≈   8.59°
+```
+
+这次应该能比较明显地看到机械臂弯曲。
+
+### 第四步，检查运动过程中的 effort
+
+12 秒记录结束后：
+
+```bash
+grep -A 7 "effort:" ~/ai_dt_motion_feedback.txt | head -100
+```
+
+或者直接：
+
+```bash
+less ~/ai_dt_motion_feedback.txt
+```
+
+重点找**运动过程中 velocity 非零的那些帧**，同时看：
+
+```text
+effort:
+```
+
+现在我们真正需要区分的是：
+
+```text
+情况 A
+velocity ≠ 0
+effort 也明显 ≠ 0
+```
+
+那么 Gazebo 物理力矩反馈是有效的，下一步就可以进入 MATLAB 闭环。
+
+如果是：
+
+```text
+情况 B
+velocity ≠ 0
+但 effort 始终约等于 0
+```
+
+那么结论就非常明确了：当前稳定的 Gazebo `position` 直接控制虽然能正常产生运动，但**没有形成可供读取的物理执行器力矩**。这时不能继续把 `/ai_dt/joint_states_physics.effort` 当成论文里的实测关节力矩。
+
+还有一点你日志里的：
+
+```text
 actual:
-  positions:
-  - 0.2861365056744285
-  - -0.29704381332593943
-  - 0.24024489309366892
-  - 0.18545994979016722
-  - -0.5618013539447535
-  - 0.17120737056613716
-  velocities:
-  - -22.194850402243606
-  - -2.5370693936120707
-  - 4.666296768190728
-  - -32.141229781494246
-  - 2.170235239789088
-  - 41.91223355996316
-  accelerations: []
   effort: []
-  time_from_start:
-    sec: 4
-    nanosec: 940000000
-error:
-  positions:
-  - 0.010489141257960244
-  - 0.0008160814287363483
-  - 0.006574875505303834
-  - 0.012423738676174106
-  - 0.3578229140631073
-  - -0.023478448908676952
-  velocities:
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  accelerations: []
-  effort: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_joint_names: []
-multi_dof_desired:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_actual:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_error:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
+```
 
-Feedback:
-    header:
-  stamp:
-    sec: 182
-    nanosec: 414000000
-  frame_id: ''
-joint_names:
-- Joint1
-- Joint2
-- Joint3
-- Joint4
-- Joint5
-- Joint6
-desired:
-  positions:
-  - 0.2994376078220648
-  - -0.29937128864953383
-  - 0.24946996143316214
-  - 0.1996472814110569
-  - -0.20066307331360772
-  - 0.14962148694291005
-  velocities:
-  - 0.05623921779352091
-  - -0.06287113504661533
-  - 0.05300385668378773
-  - 0.03527185889431156
-  - 0.06630733136077044
-  - 0.03785130570899685
-  accelerations:
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  effort: []
-  time_from_start:
-    sec: 4
-    nanosec: 990000000
-actual:
-  positions:
-  - 0.2887276449688869
-  - -0.29919879318472464
-  - 0.24569776120863906
-  - 0.1857376507075239
-  - -0.5654410382360862
-  - 0.17530944984362712
-  velocities:
-  - -24.676952034612388
-  - -2.555453378183307
-  - 5.388448216694528
-  - -35.681561677638996
-  - 1.9320558972851423
-  - 46.54214825564754
-  accelerations: []
-  effort: []
-  time_from_start:
-    sec: 4
-    nanosec: 990000000
-error:
-  positions:
-  - 0.010709962853177879
-  - -0.00017249546480918587
-  - 0.00377220022452307
-  - 0.013909630703532988
-  - 0.36477796492247844
-  - -0.025687962900717065
-  velocities:
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  - 0.0
-  accelerations: []
-  effort: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_joint_names: []
-multi_dof_desired:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_actual:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
-multi_dof_error:
-  transforms: []
-  velocities: []
-  accelerations: []
-  time_from_start:
-    sec: 0
-    nanosec: 0
+不用管。那是 `FollowJointTrajectory` 控制器反馈，它本来只配置了 position 和 velocity；你这次真正要看的仍然是：
 
-Result:
-    error_code: 0
-error_string: Goal successfully reached!
+```text
+/ai_dt/joint_states_physics
+```
 
-Goal finished with status: SUCCEEDED
-user@user-virtual-machine:~$ 
+你现在 MATLAB 端也不用改任何文件。`test_gazebo_physics_feedback` 已经正常了。
+
+做完上面这个 **回零 → 12 秒记录 → -0.20/0.15 rad 明显运动 → 检查 effort** 的测试，把 `ai_dt_motion_feedback.txt` 发给我即可。下一步我就能直接判断：是继续采用 Gazebo 实际力矩闭环，还是把你的闭环反馈改成 `q、dq、ddq` 状态误差形式。
